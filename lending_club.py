@@ -667,7 +667,7 @@ with tab_cv:
                             best_f1, best_thr = f1, thr
                     return best_thr, best_f1
 
-                skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
+                skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=int(random_state))
                 rows, cms, reports = [], [], []
 
                 for fold_id, (tr_idx, va_idx) in enumerate(skf.split(X_all, y_all), start=1):
