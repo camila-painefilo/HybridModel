@@ -108,6 +108,17 @@ missing_strategy = st.radio(
     index=0,
     horizontal=True
 )
+
+# ⬇️ ESTO ES EL SLIDER DE LA IMAGEN (열별 결측치 비율 허용 상한%)
+max_missing_pct = st.slider(
+    "Maximum allowed missing rate per column (%)",
+    min_value=0,
+    max_value=100,
+    value=50,
+    step=5,
+    help="Columns with a higher percentage of missing values will be excluded from modeling.",
+)
+
 st.write("")  # small spacing
 
 
