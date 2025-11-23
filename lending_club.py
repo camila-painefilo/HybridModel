@@ -47,29 +47,69 @@ st.markdown(
 )
 st.write("")
 
-# -------------------- Load dataset (local first, then GitHub fallback) --------------------
-DATA_PATH = Path(__file__).with_name("early_pool_balanced_15k_each.csv")
-DATA_URL = "https://github.com/altyn02/lending_club/releases/download/15k_lending/early_pool_balanced_15k_each.csv"
+# -------------------- 1. Data upload --------------------
+st.markdown("## 1. Data upload")
+uploaded_file = st.file_uploader(
+    "Upload a CSV file",
+    type=["csv"],
+    help="Upload the dataset you want to analyze (CSV format)."
+)
 
 @st.cache_data(show_spinner=True)
-def _download_csv_to_tmp(url: str) -> str:
-    fd, tmp = tempfile.mkstemp(suffix=".csv"); os.close(fd)
-    with requests.get(url, stream=True, timeout=300) as r:
-        r.raise_for_status()
-        with open(tmp, "wb") as f:
-            for chunk in r.iter_content(chunk_size=1_048_576):
-                if chunk:
-                    f.write(chunk)
-    return tmp
+def load_uploaded_csv(file) -> pd.DataFrame:
+    # Streamlit's UploadedFile can be passed directly to pandas
+    return pd.read_csv(file, low_memory=False)
 
-@st.cache_data(show_spinner=True)
-def load_data(local_path: Path, url: str) -> pd.DataFrame:
-    if local_path.exists():
-        return pd.read_csv(local_path, low_memory=False)
-    tmp = _download_csv_to_tmp(url)
-    return pd.read_csv(tmp, low_memory=False)
+if uploaded_file is None:
+    st.info("Please upload a CSV file to start the analysis.")
+    st.stop()
 
-df_full = load_data(DATA_PATH, DATA_URL)
+df_full = load_uploaded_csv(uploaded_file)
+st.success("Data upload and basic preprocessing completed.")
+
+# -------------------- 2. Analysis settings --------------------
+st.markdown("## 2. Analysis settings")
+
+c1, c2, c3 = st.columns([2, 1, 1])
+
+with c1:
+    target_col = st.selectbox(
+        "Select target (label) column",
+        options=df_full.columns,
+        help="For this dashboard, the target should be a binary variable encoded as 0 and 1."
+    )
+
+# Estandarizamos el nombre para reutilizar todo tu código:
+df_full["target"] = df_full[target_col]
+
+with c2:
+    test_size = st.slider(
+        "Test data ratio",
+        min_value=0.10,
+        max_value=0.50,
+        value=0.30,
+        step=0.05,
+        help="Proportion of data reserved for testing (for future model extensions)."
+    )
+
+with c3:
+    random_state = st.number_input(
+        "Random state",
+        min_value=0,
+        max_value=10_000,
+        value=42,
+        step=1,
+        help="Controls the randomness in model evaluation."
+    )
+
+missing_strategy = st.radio(
+    "Missing value handling (for model training)",
+    options=["Impute with mean", "Impute with 0", "Drop rows with missing values"],
+    index=0,
+    horizontal=True
+)
+st.write("")  # small spacing
+
 
 # -------------------- Light typing/cleanup --------------------
 def to_float_pct(series: pd.Series) -> pd.Series:
