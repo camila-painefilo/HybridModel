@@ -169,33 +169,54 @@ if "target" in df.columns:
 # -------------------- KPIs --------------------
 total_rows = len(df)
 total_cols = df.shape[1]
-bad_ratio = "—"
+
+pos_ratio = "—"
 if "target" in df.columns:
     try:
-        bad = (pd.to_numeric(df["target"], errors="coerce").fillna(0).astype(int) == 1).mean()
-        bad_ratio = f"{bad*100:.1f}%"
+        pos = (
+            pd.to_numeric(df["target"], errors="coerce")
+            .fillna(0)
+            .astype(int) == 1
+        ).mean()
+        pos_ratio = f"{pos * 100:.1f}%"
     except Exception:
         pass
 
 k1, k2, k3 = st.columns(3)
 with k1:
-    st.markdown(f'<div class="kpi"><div class="label">Filtered Rows</div><div class="value">{total_rows:,}</div></div>', unsafe_allow_html=True)
+    st.markdown(
+        f'<div class="kpi"><div class="label">Filtered rows</div>'
+        f'<div class="value">{total_rows:,}</div></div>',
+        unsafe_allow_html=True,
+    )
 with k2:
-    st.markdown(f'<div class="kpi"><div class="label">Columns</div><div class="value">{total_cols}</div></div>', unsafe_allow_html=True)
+    st.markdown(
+        f'<div class="kpi"><div class="label">Columns</div>'
+        f'<div class="value">{total_cols}</div></div>',
+        unsafe_allow_html=True,
+    )
 with k3:
-    st.markdown(f'<div class="kpi"><div class="label">Bad Rate </div><div class="value">{bad_ratio}</div></div>', unsafe_allow_html=True)
+    st.markdown(
+        f'<div class="kpi"><div class="label">Positive class rate (target = 1)</div>'
+        f'<div class="value">{pos_ratio}</div></div>',
+        unsafe_allow_html=True,
+    )
 
 st.write("")
-# Global target legend (always visible)
+
+# Global target info (always visible)
 st.markdown(
-    """
+    f"""
     <div style="background:#f1f5f9;padding:10px 14px;border-radius:10px;font-size:0.95rem;">
-      🎯 <b>Target legend:</b> <b>0</b> = Charged Off &nbsp;&nbsp;|&nbsp;&nbsp; <b>1</b> = Fully Paid
+      🎯 <b>Target column:</b> <code>{target_col}</code><br>
+      The dashboard assumes this is a binary variable encoded as
+      <b>0</b> (negative class) and <b>1</b> (positive class).
     </div>
     """,
-    unsafe_allow_html=True
+    unsafe_allow_html=True,
 )
 st.write("")
+
 
 # -------------------- EDA variables (fixed) --------------------
 from pandas.api.types import is_numeric_dtype
