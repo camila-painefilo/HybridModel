@@ -18,3 +18,7 @@ google-auth-oauthlib==1.2.1
 transformers==4.45.2
 tokenizers==0.20.3
 seaborn==0.13.2
+altair==5.4.1
+scikit-learn==1.5.2
+statsmodels==0.14.2
+
