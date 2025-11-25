@@ -394,41 +394,74 @@ tab_data, tab_dist, tab_corr, tab_ttest, tab_cv, tab_logit = st.tabs([
 
 
 # ========== Data Exploration ==========
-
 with tab_data:
     st.markdown('<div class="card">', unsafe_allow_html=True)
     st.subheader("Data Exploration — quick view")
-    st.write("Sample of the dataframe used for visualizations (filters applied).")
+    st.write("Sample of the dataframe used for visualizations (after filters).")
 
-    # sample for display (cap for the UI)
+    # sample for display (cap for UI responsiveness)
     SAMPLE_N = EDA_SAMPLE_N if 'EDA_SAMPLE_N' in globals() else 10000
     sample = df if len(df) <= SAMPLE_N else df.sample(SAMPLE_N, random_state=42)
 
-    # quick metrics
+    # quick metrics based on the sample
     rows, cols = sample.shape
-    missing_pct = sample.isna().mean().mean() * 100
+    avg_missing = sample.isna().mean().mean() * 100
+
     c1, c2, c3 = st.columns(3)
     with c1:
-        st.metric("Rows (shown)", f"{rows:,}")
+        st.metric("Rows (sampled)", f"{rows:,}")
     with c2:
         st.metric("Columns", f"{cols}")
     with c3:
-        st.metric("Avg missing", f"{missing_pct:.2f}%")
+        st.metric("Avg missing (sample)", f"{avg_missing:.2f}%")
 
-    st.markdown("#### Head (first rows)")
-    st.dataframe(sample.head(10), use_container_width=True)
+    # ---------- NEW: column data types ----------
+    st.markdown("#### Column data types")
+    dtypes_df = (
+        df.dtypes
+          .reset_index()
+          .rename(columns={"index": "column", 0: "dtype"})
+    )
+    dtypes_df["dtype"] = dtypes_df["dtype"].astype(str)
+    st.dataframe(dtypes_df, use_container_width=True)
 
-    st.markdown("#### Statistical summary (describe)")
+    # ---------- NEW: missing values per column ----------
+    st.markdown("#### Missing values per column")
+    missing_count = df.isna().sum()
+    missing_pct_col = df.isna().mean() * 100
+
+    missing_df = (
+        pd.DataFrame({
+            "column": df.columns,
+            "missing_count": missing_count.values,
+            "missing_pct (%)": missing_pct_col.values,
+        })
+        .sort_values("missing_count", ascending=False)
+    )
+    missing_df["missing_pct (%)"] = missing_df["missing_pct (%)"].round(2)
+    st.dataframe(missing_df, use_container_width=True)
+
+    # ---------- Head ----------
+    st.markdown("#### Head (first non-empty rows)")
+    # Prevent showing completely empty rows
+    head_df = sample.dropna(how="all").head(10)
+    st.dataframe(head_df, use_container_width=True)
+
+    # ---------- Statistical summary ----------
+    st.markdown("#### Statistical summary (`describe`)")
     desc = sample.describe(include="all").T
-    # format numeric-like columns to 3 decimals for readability
+
+    # Format numeric-like summary columns
     for col in desc.columns:
         try:
             desc[col] = pd.to_numeric(desc[col], errors="coerce").round(3).combine_first(desc[col])
         except Exception:
             pass
+
     st.dataframe(desc, use_container_width=True)
 
     st.markdown('</div>', unsafe_allow_html=True)
+
     
 # ========== Distributions (merged Histograms + Boxplots + Line) ==========
 with tab_dist:
