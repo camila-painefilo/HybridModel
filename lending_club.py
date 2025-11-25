@@ -17,6 +17,7 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.pipeline import Pipeline
 import statsmodels.api as sm
 
+from pandas.api.types import is_numeric_dtype
 
 # -------------------- Page & Theme --------------------
 st.set_page_config(page_title="Hybrid Model Agent", page_icon="💳", layout="wide")
@@ -91,6 +92,7 @@ if removed_rows > 0 or removed_cols > 0:
     msg += f" Removed {removed_rows} completely empty rows and {removed_cols} completely empty columns."
 
 st.success(msg)
+
 # -------------------- 2. Analysis settings --------------------
 st.markdown("## 2. Analysis settings")
 
@@ -233,7 +235,6 @@ max_missing_pct = st.slider(
 
 st.write("")  # small spacing
 
-
 # -------------------- Light typing/cleanup --------------------
 def to_float_pct(series: pd.Series) -> pd.Series:
     s = series.astype(str).str.replace("%","", regex=False).str.replace(",","", regex=False).str.strip()
@@ -250,8 +251,6 @@ if "issue_year" not in df_full.columns:
         if issue_dt.isna().all():
             issue_dt = pd.to_datetime(df_full["issue_d"], errors="coerce")
         df_full["issue_year"] = issue_dt.dt.year
-
-
 
 # -------------------- Sidebar Filters --------------------
 with st.sidebar:
@@ -344,10 +343,7 @@ st.markdown(
 )
 st.write("")
 
-
 # -------------------- EDA variables (fixed) --------------------
-from pandas.api.types import is_numeric_dtype
-
 REQUIRED = ["loan_amnt", "int_rate", "delinq_2yrs", "annual_inc", "dti"]
 # Use full filtered data for EDA (five vars only; safe and fast)
 df_eda = df.copy()
@@ -393,6 +389,7 @@ def categorical_cols(df: pd.DataFrame, max_card: int = 30, include_target_if_cat
             if "target" not in cats:
                 cats = ["target"] + cats
     return list(dict.fromkeys(cats))
+
 # -------------------- Modeling helpers (NEW) --------------------
 def build_model_matrix(df: pd.DataFrame) -> pd.DataFrame:
     """
@@ -431,7 +428,6 @@ def build_model_matrix(df: pd.DataFrame) -> pd.DataFrame:
     d = d[d["target"].isin([0, 1])]
 
     return d
-
 
 def stepwise_select_features(
     X_train: pd.DataFrame,
@@ -482,7 +478,6 @@ def stepwise_select_features(
 
     return selected
 
-
 def tree_select_features(
     X_train: pd.DataFrame,
     y_train: pd.Series,
@@ -508,8 +503,7 @@ def tree_select_features(
 
     return [f for f, _ in pairs[:max_features]]
 
-# -------------------- Tabs (Density removed; Logit in its own tab) --------------------
-# -------------------- Tabs (merged Hist+Box into one) --------------------
+# -------------------- Tabs --------------------
 tab_data, tab_dist, tab_corr, tab_ttest, tab_pred, tab_logit = st.tabs([
     "🧭 Data Exploration", 
     "📈 Data Visualization", 
@@ -519,8 +513,6 @@ tab_data, tab_dist, tab_corr, tab_ttest, tab_pred, tab_logit = st.tabs([
     "🧠 Model Interpretation"
 ])
 
-
-
 # ========== Data Exploration ==========
 with tab_data:
     st.markdown('<div class="card">', unsafe_allow_html=True)
@@ -528,7 +520,7 @@ with tab_data:
     st.write("Sample of the dataframe used for visualizations (after filters).")
 
     # sample for display (cap for UI responsiveness)
-    SAMPLE_N = EDA_SAMPLE_N if 'EDA_SAMPLE_N' in globals() else 10000
+    SAMPLE_N = 10000 if 'EDA_SAMPLE_N' not in globals() else EDA_SAMPLE_N
     sample = df if len(df) <= SAMPLE_N else df.sample(SAMPLE_N, random_state=42)
 
     # quick metrics based on the sample
@@ -571,7 +563,6 @@ with tab_data:
 
     # ---------- Head ----------
     st.markdown("#### Head (first non-empty rows)")
-    # Prevent showing completely empty rows
     head_df = sample.dropna(how="all").head(10)
     st.dataframe(head_df, use_container_width=True)
 
@@ -590,8 +581,7 @@ with tab_data:
 
     st.markdown('</div>', unsafe_allow_html=True)
 
-    
-# ========== Distributions (merged Histograms + Boxplots + Line) ==========
+# ========== Distributions (Histograms + Boxplots + Line) ==========
 with tab_dist:
     st.markdown('<div class="card">', unsafe_allow_html=True)
     st.subheader("Distributions — Histograms, Boxplots & Line")
@@ -618,12 +608,17 @@ with tab_dist:
         # -------------------- Line chart (time trend) --------------------
         if show_line:
             time_candidates = [c for c in ["issue_year", "issue_d"] if c in df.columns]
-            time_col = st.selectbox(
-                "Time column for line chart",
-                options=time_candidates if time_candidates else [],
-                index=0 if time_candidates else None,
-                help="Uses issue_year if available; otherwise choose a time-like column."
-            )
+
+            if not time_candidates:
+                time_col = None
+                st.info("No time column available (e.g., issue_year or issue_d).")
+            else:
+                time_col = st.selectbox(
+                    "Time column for line chart",
+                    options=time_candidates,
+                    index=0,  # safe because list is non-empty
+                    help="Uses issue_year if available; otherwise choose a time-like column."
+                )
 
             y_var = st.selectbox(
                 "Y variable",
@@ -634,7 +629,7 @@ with tab_dist:
             agg_choice = st.selectbox("Aggregation", ["Mean", "Median", "Count"], index=0, key="line_agg")
 
             if not time_col:
-                st.info("No time column available (e.g., issue_year).")
+                st.info("No time column available, so the line chart cannot be drawn.")
             else:
                 df_line = df[[time_col, y_var] + (["target"] if "target" in df.columns else [])].copy()
 
@@ -747,8 +742,7 @@ with tab_dist:
 
     st.markdown('</div>', unsafe_allow_html=True)
 
-
-# ========== Correlation Heatmap (kept; lightweight) ==========
+# ========== Correlation Heatmap ==========
 with tab_corr:
     st.markdown('<div class="card">', unsafe_allow_html=True)
     st.subheader("Correlation Heatmap (numeric only)")
@@ -782,7 +776,6 @@ with tab_corr:
     st.markdown('</div>', unsafe_allow_html=True)
 
 # ========== T- TEST ==========
-
 with tab_ttest:
     st.markdown('<div class="card">', unsafe_allow_html=True)
     st.subheader("Welch’s t-tests (0 = Charged Off, 1 = Fully Paid)")
@@ -790,10 +783,6 @@ with tab_ttest:
     if "target" not in df.columns:
         st.info("No 'target' column found.")
     else:
-        import numpy as np
-        import pandas as pd
-        from scipy import stats
-
         tnum = pd.to_numeric(df["target"], errors="coerce")
         mask_valid = tnum.isin([0, 1])
         if mask_valid.sum() < 2 or tnum[mask_valid].nunique() < 2:
@@ -864,9 +853,6 @@ with tab_ttest:
 
     st.markdown('</div>', unsafe_allow_html=True)
 
-
-# ========== Performance  ==========
-   
 # ========== Prediction Models — Logit, Tree, Hybrid ==========
 with tab_pred:
     st.markdown('<div class="card">', unsafe_allow_html=True)
@@ -880,13 +866,6 @@ with tab_pred:
         if d_model.empty:
             st.info("Not enough numeric features or valid 0/1 target after preprocessing to run prediction models.")
         else:
-            from sklearn.model_selection import train_test_split
-            from sklearn.linear_model import LogisticRegression
-            from sklearn.tree import DecisionTreeClassifier
-            from sklearn.metrics import roc_auc_score, accuracy_score, f1_score
-            from sklearn.preprocessing import StandardScaler
-            from sklearn.pipeline import Pipeline
-
             X = d_model.drop(columns=["target"])
             y = d_model["target"].astype(int)
 
@@ -993,11 +972,14 @@ with tab_pred:
                 "Step 2: Train a Logistic Regression only on those features to get an interpretable model."
             )
 
+            max_allowed_feats = min(20, X.shape[1])
+            min_allowed_feats = min(3, max_allowed_feats)
+
             max_feats_tree = st.slider(
                 "Maximum number of features selected from the tree",
-                min_value=3,
-                max_value=min(20, X.shape[1]),
-                value=min(10, X.shape[1]),
+                min_value=min_allowed_feats,
+                max_value=max_allowed_feats,
+                value=min_allowed_feats,
                 key="tree_hybrid_max_feats"
             )
 
@@ -1090,11 +1072,14 @@ with tab_pred:
 
                     st.write(f"Feature pool size for stepwise: **{X_sw.shape[1]}** numeric columns.")
 
+                    max_allowed_sw = min(20, X_sw.shape[1])
+                    min_allowed_sw = min(3, max_allowed_sw)
+
                     max_feats_sw = st.slider(
                         "Maximum number of features to select (stepwise)",
-                        min_value=3,
-                        max_value=min(20, X_sw.shape[1]),
-                        value=min(10, X_sw.shape[1]),
+                        min_value=min_allowed_sw,
+                        max_value=max_allowed_sw,
+                        value=min_allowed_sw,
                         key="stepwise_max_feats_main"
                     )
 
@@ -1130,8 +1115,6 @@ with tab_pred:
 
     st.markdown('</div>', unsafe_allow_html=True)
 
-
-
 # ========== Logit (own tab) ==========
 with tab_logit:
     st.markdown('<div class="card">', unsafe_allow_html=True)
@@ -1150,14 +1133,19 @@ with tab_logit:
             with st.expander("⚙️ Model settings", expanded=False):
                 C = st.slider("Regularization strength (C)", 0.01, 10.0, 1.0, 0.01)
                 balance = st.checkbox("Class weight = 'balanced'", value=True)
-                top_k = st.slider("Auto-select top-k features (by |coef|)", 3, min(12, len(default_pool)), 6)
+
+                max_k = min(12, len(default_pool))
+                min_k = min(3, max_k)
+
+                top_k = st.slider(
+                    "Auto-select top-k features (by |coef|)",
+                    min_value=min_k,
+                    max_value=max_k,
+                    value=min_k
+                )
                 feats_override = st.multiselect("(Optional) Manually choose features", options=numeric_pool, default=default_pool)
 
             try:
-                from sklearn.preprocessing import StandardScaler
-                from sklearn.linear_model import LogisticRegression
-                from sklearn.pipeline import Pipeline
-
                 base_feats = feats_override if feats_override else default_pool
                 dtrain0 = df[["target"] + base_feats].dropna().copy()
                 X0 = dtrain0[base_feats].values
@@ -1196,24 +1184,25 @@ with tab_logit:
             visual = st.radio("Visual type", ["Odds-ratio forest", "Probability vs one feature", "Interaction heatmap"], horizontal=True)
 
             if visual == "Odds-ratio forest":
-                coefs = clf.coef_.ravel(); odds = np.exp(coefs)
+                coefs = clf.coef_.ravel()
+                odds = np.exp(coefs)
                 ci_low, ci_high = None, None
                 try:
-                    import statsmodels.api as sm
-                    from sklearn.preprocessing import StandardScaler
                     Z = StandardScaler().fit_transform(dtrain[feats].values)
                     Z = sm.add_constant(Z)
                     sm_mod = sm.Logit(y, Z).fit(disp=False)
                     params = sm_mod.params[1:]
                     cov = sm_mod.cov_params().values[1:, 1:]
                     se = np.sqrt(np.diag(cov))
-                    ci_low = np.exp(params - 1.96 * se); ci_high = np.exp(params + 1.96 * se)
+                    ci_low = np.exp(params - 1.96 * se)
+                    ci_high = np.exp(params + 1.96 * se)
                 except Exception:
                     pass
 
                 coef_df = pd.DataFrame({"feature": feats, "odds_ratio": odds}).sort_values("odds_ratio", ascending=False)
                 if ci_low is not None:
-                    coef_df["ci_low"] = ci_low; coef_df["ci_high"] = ci_high
+                    coef_df["ci_low"] = ci_low
+                    coef_df["ci_high"] = ci_high
 
                 base = alt.Chart(coef_df).encode(y=alt.Y("feature:N", sort="-x", title=""))
                 bars = base.mark_bar(size=10).encode(
@@ -1229,10 +1218,10 @@ with tab_logit:
                 st.altair_chart(chart.properties(height=360), use_container_width=True)
 
             elif visual == "Probability vs one feature":
-                # prefer one of your EDA vars if present
                 feasible = [f for f in feats if f in EDA_VARS] or feats
                 one_x = feasible[0]
-                plot_df = dtrain[[one_x]].copy(); plot_df["p1"] = probs
+                plot_df = dtrain[[one_x]].copy()
+                plot_df["p1"] = probs
                 bins = np.linspace(plot_df[one_x].min(), plot_df[one_x].max(), 31)
                 plot_df["bin"] = pd.cut(plot_df[one_x], bins=bins, include_lowest=True)
                 line_df = plot_df.groupby("bin", observed=False).agg(
@@ -1251,17 +1240,25 @@ with tab_logit:
                     st.info("Need at least two features for an interaction.")
                 else:
                     f1, f2 = feats[0], feats[1]
-                    tmp = dtrain[[f1, f2]].copy(); tmp["p1"] = probs
+                    tmp = dtrain[[f1, f2]].copy()
+                    tmp["p1"] = probs
                     bx = pd.cut(tmp[f1], bins=20, include_lowest=True)
                     by = pd.cut(tmp[f2], bins=20, include_lowest=True)
                     grid = tmp.groupby([bx, by], observed=False)["p1"].mean().reset_index()
                     grid.columns = [f1, f2, "p"]
+
                     def mid(iv):
-                        try: return (iv.left + iv.right) / 2
-                        except Exception: return np.nan
-                    grid["x"] = grid[f1].apply(mid); grid["y"] = grid[f2].apply(mid); grid = grid.dropna()
+                        try:
+                            return (iv.left + iv.right) / 2
+                        except Exception:
+                            return np.nan
+
+                    grid["x"] = grid[f1].apply(mid)
+                    grid["y"] = grid[f2].apply(mid)
+                    grid = grid.dropna()
                     heat = alt.Chart(grid).mark_rect().encode(
-                        x=alt.X("x:Q", title=f1), y=alt.Y("y:Q", title=f2),
+                        x=alt.X("x:Q", title=f1),
+                        y=alt.Y("y:Q", title=f2),
                         color=alt.Color("p:Q", title="Mean P(target=1)"),
                         tooltip=[alt.Tooltip("x:Q", format=".2f"),
                                  alt.Tooltip("y:Q", format=".2f"),
@@ -1272,8 +1269,6 @@ with tab_logit:
             st.caption("Exploratory interpretation only • Standardized features • No performance metrics shown.")
 
     st.markdown('</div>', unsafe_allow_html=True)
-
-    
 
 # -------------------- Footer --------------------
 st.write("")
