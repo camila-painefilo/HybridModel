@@ -917,7 +917,59 @@ def main():
                                 {"AUC": "{:.4f}", "Accuracy": "{:.4f}", "F1": "{:.4f}"}
                             ),
                             use_container_width=True
-                        )
+                        ) 
+                        # 🔥 Final comparative analysis block (professor requirement)
+                        from sklearn.metrics import confusion_matrix, precision_score, recall_score
+                        
+                        st.divider()
+                        st.subheader("📌 Final Comparative Analysis (All Models)")
+                        
+                        comp_rows = []
+                        
+                        # Baseline Logit
+                        if "preds_logit" in locals():
+                            cm = confusion_matrix(y_test, preds_logit)
+                            comp_rows.append({
+                                "Model": "Baseline Logistic Regression",
+                                "AUC": auc_logit,
+                                "Accuracy": acc_logit,
+                                "Precision": precision_score(y_test, preds_logit, zero_division=0),
+                                "Recall": recall_score(y_test, preds_logit, zero_division=0),
+                                "Confusion Matrix": cm
+                            })
+                        
+                        # Stepwise Logit
+                        if "preds_sw" in locals():
+                            cm = confusion_matrix(y_test_sw, preds_sw)
+                            comp_rows.append({
+                                "Model": "Stepwise Logistic Regression",
+                                "AUC": auc_sw,
+                                "Accuracy": acc_sw,
+                                "Precision": precision_score(y_test_sw, preds_sw, zero_division=0),
+                                "Recall": recall_score(y_test_sw, preds_sw, zero_division=0),
+                                "Confusion Matrix": cm
+                            })
+                        
+                        # Decision Tree
+                        if "preds_tree" in locals():
+                            cm = confusion_matrix(y_test, preds_tree)
+                            comp_rows.append({
+                                "Model": "Decision Tree",
+                                "AUC": auc_tree,
+                                "Accuracy": acc_tree,
+                                "Precision": precision_score(y_test, preds_tree, zero_division=0),
+                                "Recall": recall_score(y_test, preds_tree, zero_division=0),
+                                "Confusion Matrix": cm
+                            })
+                        
+                        if comp_rows:
+                            comp_df_all = pd.DataFrame(comp_rows)
+                            st.dataframe(comp_df_all, use_container_width=True)
+                            st.success("Comparative analysis completed successfully.")
+                        else:
+                            st.info("Run at least two models to compare them.")
+                                            
+                        
 
                 # Stepwise (expander)
                 with st.expander("Advanced: Forward stepwise feature selection + Logistic Regression"):
