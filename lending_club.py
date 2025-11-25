@@ -79,61 +79,93 @@ with c1:
     target_col = st.selectbox(
         "Select target (label) column",
         options=df_full.columns,
-        help="If the selected column is not binary (0/1), you will be able to map which values correspond to target=1."
+        help="If the selected column is not binary (0/1), you will be able to map which values correspond to target=1 and target=0."
     )
 
-# Extract raw target values
+# Raw target values
 target_raw = df_full[target_col]
 
-# Identify unique values (excluding NaN)
+# Unique values
 unique_vals = target_raw.dropna().unique()
+labels = [str(v) for v in unique_vals]
+label_to_val = dict(zip(labels, unique_vals))
 
-# Check if column is already binary 0/1
+# Try to detect if it's already numeric binary {0,1}
 try:
     numeric_unique = pd.to_numeric(unique_vals, errors="coerce")
     is_binary = (
         len(unique_vals) == 2
         and set(pd.Series(numeric_unique).dropna().astype(int).unique()) <= {0, 1}
     )
-except:
+except Exception:
     is_binary = False
 
-# ------------------------------------------------------------
-# CASE 1 — Column already binary (0/1)
-# ------------------------------------------------------------
+# -------------------- Target mapping UI (BAD = 1, GOOD = 0) --------------------
+st.sidebar.markdown("### Configure binary target mapping")
+
+# Defaults: if already binary, preselect 1 as BAD and 0 as GOOD
+default_bad_labels = []
+default_good_labels = []
 if is_binary:
-    df_full["target"] = pd.to_numeric(target_raw, errors="coerce").fillna(0).astype(int)
-    st.sidebar.info("Detected binary target (0/1). Using it as-is.")
+    # Map numeric 1 -> BAD, numeric 0 -> GOOD
+    numeric_map = dict(zip(labels, numeric_unique))
+    for lab, val in numeric_map.items():
+        if pd.isna(val):
+            continue
+        if int(val) == 1:
+            default_bad_labels.append(lab)
+        elif int(val) == 0:
+            default_good_labels.append(lab)
 
-# ------------------------------------------------------------
-# CASE 2 — Column NOT binary → let user map the values
-# ------------------------------------------------------------
-else:
-    st.sidebar.markdown("### Configure binary target")
-    st.sidebar.caption("Select which values should be considered BAD (target = 1). Others will be mapped to 0.")
+st.sidebar.caption(
+    "Select which values should be considered BAD (target=1) and GOOD (target=0). "
+    "Values not selected in either group will be ignored in modeling."
+)
 
-    # Convert values to string for UI, but keep mapping to original values
-    value_labels = [str(v) for v in unique_vals]
-    label_to_value = dict(zip(value_labels, unique_vals))
+bad_labels = st.sidebar.multiselect(
+    "BAD class values (target = 1):",
+    options=sorted(labels),
+    default=sorted(default_bad_labels),
+    help="Choose values that represent default, churn, bad loans, etc."
+)
 
-    # Multiselect UI
-    bad_labels = st.sidebar.multiselect(
-        "Bad class values (target = 1):",
-        options=sorted(value_labels),
-        help="Choose the values that represent default, bad loan, churn, etc."
-    )
+good_labels = st.sidebar.multiselect(
+    "GOOD class values (target = 0):",
+    options=sorted(labels),
+    default=sorted(default_good_labels),
+    help="Choose values that represent fully paid, retained customers, etc."
+)
 
-    # Require at least one selection
-    if not bad_labels:
-        st.sidebar.warning("Please select at least one value for target=1 to continue.")
-        st.stop()
+# Check for conflicts: same value in both groups
+conflict = set(bad_labels) & set(good_labels)
+if conflict:
+    st.sidebar.error(f"The following values are assigned to both 1 and 0: {conflict}. Please fix this.")
+    st.stop()
 
-    bad_values = [label_to_value[l] for l in bad_labels]
+bad_vals = [label_to_val[l] for l in bad_labels]
+good_vals = [label_to_val[l] for l in good_labels]
 
-    # Create binary target
-    df_full["target"] = df_full[target_col].isin(bad_values).astype(int)
+# Build target column: 1 = BAD, 0 = GOOD, others = NaN (ignored later)
+df_full["target"] = pd.NA
 
-    st.sidebar.success(f"Mapped {len(bad_values)} values to target=1 (bad class).")
+df_full.loc[target_raw.isin(bad_vals), "target"] = 1
+df_full.loc[target_raw.isin(good_vals), "target"] = 0
+
+df_full["target"] = pd.to_numeric(df_full["target"], errors="coerce")
+
+# Basic validation
+if df_full["target"].isna().all():
+    st.sidebar.error("No valid target mapping. Please assign at least one value to 1 or 0.")
+    st.stop()
+
+if df_full["target"].nunique() < 2:
+    st.sidebar.error("Target has only one class after mapping. Please assign values to both 1 and 0.")
+    st.stop()
+
+st.sidebar.success(
+    f"Mapped {len(bad_vals)} values to target=1 (BAD) and {len(good_vals)} values to target=0 (GOOD). "
+    "Unselected values will be ignored."
+)
 
 # ------------------------------------------------------------
 # 2) Other analysis settings (unchanged)
@@ -194,6 +226,7 @@ if "issue_year" not in df_full.columns:
         if issue_dt.isna().all():
             issue_dt = pd.to_datetime(df_full["issue_d"], errors="coerce")
         df_full["issue_year"] = issue_dt.dt.year
+
 
 
 # -------------------- Sidebar Filters --------------------
