@@ -884,7 +884,7 @@ def main():
                     if not feats_tree:
                         st.warning("The decision tree did not select any informative features.")
                     else:
-                        st.write("**Features selected by the Decision Tree:**", ", ".join(feats_tree))
+                        st.write(f"**Features selected by the Decision Tree** "f"({len(feats_tree)} features): "+ ", ".join(feats_tree))
                         hybrid_pipe = Pipeline([
                             ("scaler", StandardScaler()),
                             ("logit", LogisticRegression(
