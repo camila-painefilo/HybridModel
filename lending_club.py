@@ -309,9 +309,11 @@ st.write("")
 st.markdown(
     f"""
     <div style="background:#f1f5f9;padding:10px 14px;border-radius:10px;font-size:0.95rem;">
-      🎯 <b>Target column:</b> <code>{target_col}</code><br>
-      The dashboard assumes this is a binary variable encoded as
-      <b>0</b> (negative class) and <b>1</b> (positive class).
+      🎯 <b>Target column:</b> <code>{target_col}</code><br><br>
+      This dashboard uses a binary target where <b>1 = bad outcome (event)</b> and 
+      <b>0 = good outcome (non-event)</b>.<br>
+      You can configure which raw values map to 0 or 1 in the sidebar; 
+      any values not assigned to either class will be <b>ignored</b>.
     </div>
     """,
     unsafe_allow_html=True,
