@@ -384,6 +384,120 @@ def categorical_cols(df: pd.DataFrame, max_card: int = 30, include_target_if_cat
             if "target" not in cats:
                 cats = ["target"] + cats
     return list(dict.fromkeys(cats))
+# -------------------- Modeling helpers (NEW) --------------------
+def build_model_matrix(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Build a clean modeling dataframe using:
+    - numeric features only (excluding 'target')
+    - max_missing_pct slider
+    - missing_strategy radio
+    """
+    if "target" not in df.columns:
+        return pd.DataFrame()
+
+    # numeric features (except target)
+    num_cols = [c for c in df.select_dtypes(include=[np.number]).columns if c != "target"]
+    if not num_cols:
+        return pd.DataFrame()
+
+    # keep columns with missing % <= max_missing_pct
+    miss_pct = df[num_cols].isna().mean() * 100
+    keep_cols = miss_pct[miss_pct <= max_missing_pct].index.tolist()
+    if not keep_cols:
+        return pd.DataFrame()
+
+    d = df[["target"] + keep_cols].copy()
+
+    # handle missing values according to UI
+    if missing_strategy == "Impute with mean":
+        for c in keep_cols:
+            d[c] = d[c].fillna(d[c].mean())
+    elif missing_strategy == "Impute with 0":
+        d[keep_cols] = d[keep_cols].fillna(0)
+    else:  # "Drop rows with missing values"
+        d = d.dropna(subset=keep_cols)
+
+    # ensure target is 0/1 numeric
+    d["target"] = pd.to_numeric(d["target"], errors="coerce")
+    d = d[d["target"].isin([0, 1])]
+
+    return d
+
+
+def stepwise_select_features(
+    X_train: pd.DataFrame,
+    y_train: pd.Series,
+    X_val: pd.DataFrame,
+    y_val: pd.Series,
+    max_features: int = 15,
+) -> list:
+    """
+    Simple forward stepwise selection:
+    - start with no features
+    - at each step: add the feature that gives the best validation AUC
+    - stop when no improvement
+    """
+    from sklearn.linear_model import LogisticRegression
+    from sklearn.metrics import roc_auc_score
+
+    remaining = list(X_train.columns)
+    selected = []
+    best_auc = 0.0
+
+    while remaining and len(selected) < max_features:
+        best_candidate = None
+        best_candidate_auc = best_auc
+
+        for f in remaining:
+            feats = selected + [f]
+            model = LogisticRegression(
+                max_iter=1000,
+                solver="liblinear",
+                class_weight="balanced"
+            )
+            model.fit(X_train[feats], y_train)
+
+            probs = model.predict_proba(X_val[feats])[:, 1]
+            auc = roc_auc_score(y_val, probs)
+
+            if auc > best_candidate_auc + 1e-4:
+                best_candidate_auc = auc
+                best_candidate = f
+
+        if best_candidate is None:
+            break  # no more improvement
+
+        selected.append(best_candidate)
+        remaining.remove(best_candidate)
+        best_auc = best_candidate_auc
+
+    return selected
+
+
+def tree_select_features(
+    X_train: pd.DataFrame,
+    y_train: pd.Series,
+    max_features: int = 15,
+    random_state: int = 42,
+) -> list:
+    """
+    Train a shallow decision tree and select the top features by importance.
+    Used to build a 'tree-selected Logit' hybrid model.
+    """
+    from sklearn.tree import DecisionTreeClassifier
+
+    tree = DecisionTreeClassifier(
+        max_depth=5,
+        min_samples_leaf=50,
+        random_state=random_state,
+    )
+    tree.fit(X_train, y_train)
+
+    importances = tree.feature_importances_
+    pairs = [(f, imp) for f, imp in zip(X_train.columns, importances) if imp > 0]
+    pairs.sort(key=lambda x: x[1], reverse=True)
+
+    return [f for f, _ in pairs[:max_features]]
 
 # -------------------- Tabs (Density removed; Logit in its own tab) --------------------
 # -------------------- Tabs (merged Hist+Box into one) --------------------
@@ -893,6 +1007,174 @@ with tab_cv:
                 st.dataframe(cm_df_total, use_container_width=True)
                 st.caption("Threshold is optimized per fold to maximize F1 for the positive class (1 = Fully Paid).")
 
+    # --- NEW: Stepwise feature selection + Logistic Regression (single split) ---
+    with st.expander("🔍 Stepwise feature selection + Logistic Regression", expanded=False):
+        d_model = build_model_matrix(df)
+        if d_model.empty:
+            st.info("Not enough numeric features or valid target to run stepwise modeling.")
+        else:
+            from sklearn.model_selection import train_test_split
+            from sklearn.linear_model import LogisticRegression
+            from sklearn.metrics import (
+                roc_auc_score, accuracy_score, f1_score, confusion_matrix
+            )
+
+            X = d_model.drop(columns=["target"])
+            y = d_model["target"].astype(int)
+
+            # train / val / test split uses the same test_size & random_state as UI
+            X_train, X_temp, y_train, y_temp = train_test_split(
+                X, y,
+                test_size=test_size,
+                random_state=int(random_state),
+                stratify=y
+            )
+            X_val, X_test, y_val, y_test = train_test_split(
+                X_temp, y_temp,
+                test_size=0.5,
+                random_state=int(random_state),
+                stratify=y_temp
+            )
+
+            st.write(f"Feature pool size (after missing-value filter): **{X.shape[1]}** numeric columns.")
+
+            max_feats = st.slider(
+                "Maximum number of features to select (stepwise)",
+                min_value=3,
+                max_value=min(20, X.shape[1]),
+                value=min(10, X.shape[1]),
+                key="stepwise_max_feats"
+            )
+
+            if st.button("Run stepwise + logistic regression", key="btn_stepwise"):
+                feats_sw = stepwise_select_features(
+                    X_train, y_train, X_val, y_val,
+                    max_features=max_feats
+                )
+                if not feats_sw:
+                    st.warning("Stepwise did not find any feature that improves AUC over baseline.")
+                else:
+                    st.write("**Selected features:**", ", ".join(feats_sw))
+
+                    model = LogisticRegression(
+                        max_iter=1000,
+                        solver="liblinear",
+                        class_weight="balanced"
+                    )
+                    model.fit(X_train[feats_sw], y_train)
+
+                    probs = model.predict_proba(X_test[feats_sw])[:, 1]
+                    preds = (probs >= 0.5).astype(int)
+
+                    auc = roc_auc_score(y_test, probs)
+                    acc = accuracy_score(y_test, preds)
+                    f1 = f1_score(y_test, preds)
+                    cm = confusion_matrix(y_test, preds, labels=[0, 1])
+
+                    st.write(
+                        f"**Test AUC:** {auc:.4f} · "
+                        f"**Accuracy:** {acc:.4f} · "
+                        f"**F1-score:** {f1:.4f}"
+                    )
+                    st.write("Confusion matrix (rows = true, cols = predicted):")
+                    cm_df = pd.DataFrame(
+                        cm,
+                        index=["True 0", "True 1"],
+                        columns=["Pred 0", "Pred 1"]
+                    )
+                    st.dataframe(cm_df, use_container_width=True)
+    # --- NEW: Decision Tree model + Tree-selected Logistic Regression (hybrid) ---
+    with st.expander("🌳 Decision Tree model + Tree-selected Logistic Regression", expanded=False):
+        d_model2 = build_model_matrix(df)
+        if d_model2.empty:
+            st.info("Not enough numeric features or valid target for tree-based modeling.")
+        else:
+            from sklearn.model_selection import train_test_split
+            from sklearn.tree import DecisionTreeClassifier
+            from sklearn.linear_model import LogisticRegression
+            from sklearn.metrics import (
+                roc_auc_score, accuracy_score, f1_score
+            )
+
+            X = d_model2.drop(columns=["target"])
+            y = d_model2["target"].astype(int)
+
+            X_train, X_test, y_train, y_test = train_test_split(
+                X, y,
+                test_size=test_size,
+                random_state=int(random_state),
+                stratify=y
+            )
+
+            max_feats_tree = st.slider(
+                "Maximum number of features from decision tree",
+                min_value=3,
+                max_value=min(20, X.shape[1]),
+                value=min(10, X.shape[1]),
+                key="tree_max_feats"
+            )
+
+            if st.button("Run Decision Tree + Tree-selected Logit", key="btn_tree_logit"):
+                # 1) Pure decision tree model
+                tree_clf = DecisionTreeClassifier(
+                    max_depth=5,
+                    min_samples_leaf=50,
+                    random_state=int(random_state),
+                )
+                tree_clf.fit(X_train, y_train)
+
+                probs_tree = tree_clf.predict_proba(X_test)[:, 1]
+                preds_tree = (probs_tree >= 0.5).astype(int)
+
+                auc_tree = roc_auc_score(y_test, probs_tree)
+                acc_tree = accuracy_score(y_test, preds_tree)
+                f1_tree = f1_score(y_test, preds_tree)
+
+                # 2) Tree-based feature selection → Logit
+                feats_tree = tree_select_features(
+                    X_train, y_train,
+                    max_features=max_feats_tree,
+                    random_state=int(random_state),
+                )
+
+                if not feats_tree:
+                    st.warning("Tree did not select any informative features.")
+                else:
+                    st.write("**Tree-selected features for Logit:**", ", ".join(feats_tree))
+
+                    logit = LogisticRegression(
+                        max_iter=1000,
+                        solver="liblinear",
+                        class_weight="balanced"
+                    )
+                    logit.fit(X_train[feats_tree], y_train)
+
+                    probs_logit = logit.predict_proba(X_test[feats_tree])[:, 1]
+                    preds_logit = (probs_logit >= 0.5).astype(int)
+
+                    auc_logit = roc_auc_score(y_test, probs_logit)
+                    acc_logit = accuracy_score(y_test, preds_logit)
+                    f1_logit = f1_score(y_test, preds_logit)
+
+                    comp = pd.DataFrame([
+                        {"model": "Decision Tree",
+                         "AUC": auc_tree,
+                         "Accuracy": acc_tree,
+                         "F1": f1_tree},
+                        {"model": "Tree-selected Logit",
+                         "AUC": auc_logit,
+                         "Accuracy": acc_logit,
+                         "F1": f1_logit},
+                    ])
+
+                    st.subheader("Model comparison (test set)")
+                    st.dataframe(
+                        comp.style.format(
+                            {"AUC": "{:.4f}", "Accuracy": "{:.4f}", "F1": "{:.4f}"}
+                        ),
+                        use_container_width=True
+                    )
+
     st.markdown('</div>', unsafe_allow_html=True)
 
 
@@ -1036,6 +1318,8 @@ with tab_logit:
             st.caption("Exploratory interpretation only • Standardized features • No performance metrics shown.")
 
     st.markdown('</div>', unsafe_allow_html=True)
+
+    
 
 # -------------------- Footer --------------------
 st.write("")
