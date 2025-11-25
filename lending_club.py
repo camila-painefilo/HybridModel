@@ -5,6 +5,9 @@ import pandas as pd
 import numpy as np
 import altair as alt
 
+if "welcome_done" not in st.session_state:
+    st.session_state.welcome_done = False
+
 
 def main():
     # heavy / optional libs imported inside main so ModuleNotFoundError doesn't kill the whole app
@@ -33,6 +36,8 @@ def main():
     .kpi .label{font-size:.92rem;color:#475569}.kpi .value{font-size:1.35rem;font-weight:700;color:#0f172a}
     </style>
     """
+
+    
     st.markdown(CSS, unsafe_allow_html=True)
 
     # -------------------- HERO --------------------
@@ -55,6 +60,25 @@ def main():
         unsafe_allow_html=True
     )
     st.write("")
+
+if not st.session_state.welcome_done:
+    st.markdown(
+        """
+        <div style='text-align:center; margin-top:40px;'>
+            <h1 style='font-size:42px;'>💳 Welcome to the Hybrid Model Agent</h1>
+            <p style='font-size:20px; color:gray;'>
+                A powerful and intelligent platform for LendingClub prediction, EDA, and hybrid modeling.
+            </p>
+        </div>
+        """, unsafe_allow_html=True
+    )
+
+    start = st.button("🚀 Start the Analysis")
+    if start:
+        st.session_state.welcome_done = True
+        st.rerun()
+
+    st.stop()  # Stops the rest of the dashboard from loading
 
     # -------------------- 1. Data upload --------------------
     st.markdown("## 1. Data upload")
