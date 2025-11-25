@@ -501,10 +501,15 @@ def tree_select_features(
 
 # -------------------- Tabs (Density removed; Logit in its own tab) --------------------
 # -------------------- Tabs (merged Hist+Box into one) --------------------
-tab_data, tab_dist, tab_corr, tab_ttest, tab_cv, tab_logit = st.tabs([
-    "🧭Data Exploration", "📈 Data Visualization", "🧮 Correlation Heatmap",
-    "📏 t-Tests", "🏁 Performance Evaluation ", "🧠 Logit"
+tab_data, tab_dist, tab_corr, tab_ttest, tab_pred, tab_logit = st.tabs([
+    "🧭 Data Exploration", 
+    "📈 Data Visualization", 
+    "🧮 Correlation Heatmap",
+    "📏 t-Tests", 
+    "🔮 Prediction Models (Hybrid)", 
+    "🧠 Model Interpretation"
 ])
+
 
 
 # ========== Data Exploration ==========
@@ -853,258 +858,30 @@ with tab_ttest:
 
 # ========== Performance  ==========
    
-with tab_cv:
+# ========== Prediction Models — Logit, Tree, Hybrid ==========
+with tab_pred:
     st.markdown('<div class="card">', unsafe_allow_html=True)
-    st.subheader("5-Fold Cross-Validation Performance (F1-optimized)")
-    st.caption("Target legend — 0: Charged Off, 1: Fully Paid")
+    st.subheader("Prediction Models — Logistic Regression, Decision Tree & Hybrid")
+    st.caption("Target legend — 0: good outcome, 1: bad outcome (as defined in the sidebar mapping).")
 
     if "target" not in df.columns:
-        st.info("No 'target' column found.")
+        st.info("No 'target' column found. Please configure the target variable in the Analysis settings.")
     else:
-        # --- Independent model settings for CV (decoupled from Logit tab)
-        numeric_pool = [c for c in df.select_dtypes(include=[np.number]).columns if c != "target"]
-        if len(numeric_pool) == 0:
-            st.info("No numeric features available for CV.")
-        else:
-            default_pool = [c for c in ["int_rate","dti","revol_util","loan_amnt","annual_inc"] if c in numeric_pool] or numeric_pool[:8]
-
-            with st.expander("⚙️ CV settings (features & regularization)", expanded=False):
-                C_cv = st.slider("Regularization strength (C)", 0.01, 10.0, 1.0, 0.01, key="cv_C")
-                balance_cv = st.checkbox("Class weight = 'balanced'", value=True, key="cv_bal")
-                top_k_cv = st.slider("Auto-select top-k features (by |coef|)", 3, min(12, len(default_pool)), 6, key="cv_topk")
-                feats_override_cv = st.multiselect(
-                    "(Optional) Manually choose features",
-                    options=numeric_pool,
-                    default=default_pool,
-                    key="cv_feats_override"
-                )
-
-            # --- Build a feature set for CV: quick prefit to rank by |coef|
-            from sklearn.preprocessing import StandardScaler
-            from sklearn.linear_model import LogisticRegression
-            from sklearn.pipeline import Pipeline
-            try:
-                base_feats_cv = feats_override_cv if feats_override_cv else default_pool
-                dtrain0_cv = df[["target"] + base_feats_cv].dropna().copy()
-                if dtrain0_cv.empty:
-                    st.info("Not enough non-missing rows for the selected features.")
-                    st.markdown('</div>', unsafe_allow_html=True)
-                    st.stop()
-
-                X0_cv = dtrain0_cv[base_feats_cv].values
-                y0_cv = pd.to_numeric(dtrain0_cv["target"], errors="coerce").astype(int).values
-
-                base_pipe_cv = Pipeline([
-                    ("scaler", StandardScaler()),
-                    ("logit", LogisticRegression(
-                        C=C_cv, class_weight=("balanced" if balance_cv else None),
-                        solver="liblinear", max_iter=400))
-                ])
-                base_pipe_cv.fit(X0_cv, y0_cv)
-
-                init_coefs_cv = base_pipe_cv.named_steps["logit"].coef_.ravel()
-                order_cv = np.argsort(-np.abs(init_coefs_cv))
-                feats_cv = [base_feats_cv[i] for i in order_cv[:top_k_cv]]
-            except Exception as e:
-                st.info("Scikit-learn is required for this tab. Add `scikit-learn` to requirements.")
-                st.exception(e)
-                st.markdown('</div>', unsafe_allow_html=True)
-                st.stop()
-
-            st.write("**Features used for CV:**", ", ".join(feats_cv))
-            run_cv = st.button("Run 5-fold CV", key="run_cv_button")
-
-            if run_cv:
-                from sklearn.model_selection import StratifiedKFold
-                from sklearn.metrics import accuracy_score, f1_score, classification_report, confusion_matrix, roc_auc_score
-
-                data = df[["target"] + feats_cv].dropna().copy()
-                X_all = data[feats_cv].values
-                y_all = pd.to_numeric(data["target"], errors="coerce").astype(int).values
-
-                def best_threshold_for_f1(y_true, probs):
-                    thr_grid = np.linspace(0.05, 0.95, 181)
-                    best_thr, best_f1 = 0.5, -1.0
-                    for thr in thr_grid:
-                        y_hat = (probs >= thr).astype(int)
-                        f1 = f1_score(y_true, y_hat, average="binary", zero_division=0)
-                        if f1 > best_f1:
-                            best_f1, best_thr = f1, thr
-                    return best_thr, best_f1
-
-                skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=int(random_state))
-                rows, cms, reports = [], [], []
-
-                for fold_id, (tr_idx, va_idx) in enumerate(skf.split(X_all, y_all), start=1):
-                    X_tr, X_va = X_all[tr_idx], X_all[va_idx]
-                    y_tr, y_va = y_all[tr_idx], y_all[va_idx]
-
-                    scaler = StandardScaler().fit(X_tr)
-                    X_tr_s = scaler.transform(X_tr)
-                    X_va_s = scaler.transform(X_va)
-
-                    logit = LogisticRegression(
-                        C=C_cv,
-                        class_weight=("balanced" if balance_cv else None),
-                        max_iter=1000,
-                        solver="liblinear",
-                        random_state=42
-                    )
-                    logit.fit(X_tr_s, y_tr)
-
-                    p_tr = logit.predict_proba(X_tr_s)[:, 1]
-                    p_va = logit.predict_proba(X_va_s)[:, 1]
-
-                    best_thr, _ = best_threshold_for_f1(y_va, p_va)
-                    y_tr_hat = (p_tr >= best_thr).astype(int)
-                    y_va_hat = (p_va >= best_thr).astype(int)
-
-                    tr_acc = accuracy_score(y_tr, y_tr_hat)
-                    va_acc = accuracy_score(y_va, y_va_hat)
-                    va_f1 = f1_score(y_va, y_va_hat, average="binary", zero_division=0)
-                    va_auc = roc_auc_score(y_va, p_va)
-
-                    cm = confusion_matrix(y_va, y_va_hat, labels=[0, 1])
-                    rep = classification_report(y_va, y_va_hat, digits=3, zero_division=0)
-                    cms.append(cm); reports.append((fold_id, rep))
-
-                    rows.append({
-                        "fold": fold_id,
-                        "best_thr": round(float(best_thr), 3),
-                        "train_acc": round(tr_acc, 4),
-                        "val_acc": round(va_acc, 4),
-                        "val_f1": round(va_f1, 4),
-                        "val_auc": round(va_auc, 4),
-                        "support_0": int((y_va == 0).sum()),
-                        "support_1": int((y_va == 1).sum()),
-                    })
-
-                results_df = pd.DataFrame(rows)
-                st.subheader("Per-Fold Results")
-                st.dataframe(results_df, use_container_width=True)
-
-                avg = results_df.mean(numeric_only=True)
-                st.subheader("Averages (5-Fold)")
-                st.write(
-                    f"**Mean Train Acc:** {avg['train_acc']:.4f} | "
-                    f"**Mean Val Acc:** {avg['val_acc']:.4f} | "
-                    f"**Mean Val F1:** {avg['val_f1']:.4f} | "
-                    f"**Mean Val AUC:** {avg['val_auc']:.4f} | "
-                    f"**Mean Best Thr:** {avg['best_thr']:.3f}"
-                )
-
-                st.subheader("Confusion Matrices")
-                total_cm = np.zeros((2, 2), dtype=int)
-                for i, cm in enumerate(cms, start=1):
-                    total_cm += cm
-                    with st.expander(f"Fold {i} confusion matrix & report"):
-                        cm_df = pd.DataFrame(cm, index=["True 0","True 1"], columns=["Pred 0","Pred 1"])
-                        st.dataframe(cm_df, use_container_width=True)
-                        st.code(reports[i-1][1], language="text")
-
-                st.subheader("Aggregated Confusion Matrix")
-                cm_df_total = pd.DataFrame(total_cm, index=["True 0","True 1"], columns=["Pred 0","Pred 1"])
-                st.dataframe(cm_df_total, use_container_width=True)
-                st.caption("Threshold is optimized per fold to maximize F1 for the positive class (1 = Fully Paid).")
-
-    # --- NEW: Stepwise feature selection + Logistic Regression (single split) ---
-    with st.expander("🔍 Stepwise feature selection + Logistic Regression", expanded=False):
         d_model = build_model_matrix(df)
         if d_model.empty:
-            st.info("Not enough numeric features or valid target to run stepwise modeling.")
+            st.info("Not enough numeric features or valid 0/1 target after preprocessing to run prediction models.")
         else:
             from sklearn.model_selection import train_test_split
             from sklearn.linear_model import LogisticRegression
-            from sklearn.metrics import (
-                roc_auc_score, accuracy_score, f1_score, confusion_matrix
-            )
+            from sklearn.tree import DecisionTreeClassifier
+            from sklearn.metrics import roc_auc_score, accuracy_score, f1_score
+            from sklearn.preprocessing import StandardScaler
+            from sklearn.pipeline import Pipeline
 
             X = d_model.drop(columns=["target"])
             y = d_model["target"].astype(int)
 
-            # train / val / test split uses the same test_size & random_state as UI
-            X_train, X_temp, y_train, y_temp = train_test_split(
-                X, y,
-                test_size=test_size,
-                random_state=int(random_state),
-                stratify=y
-            )
-            X_val, X_test, y_val, y_test = train_test_split(
-                X_temp, y_temp,
-                test_size=0.5,
-                random_state=int(random_state),
-                stratify=y_temp
-            )
-
-            st.write(f"Feature pool size (after missing-value filter): **{X.shape[1]}** numeric columns.")
-
-                        # Safe slider bounds even when we have very few features
-            feat_cap = X.shape[1]
-            min_val = 1 if feat_cap < 3 else 3
-            max_val = min(20, feat_cap)
-            default_val = min(10, feat_cap)
-
-            max_feats = st.slider(
-                "Maximum number of features to select (stepwise)",
-                min_value=min_val,
-                max_value=max_val,
-                value=default_val,
-                key="stepwise_max_feats"
-            )
-
-            if st.button("Run stepwise + logistic regression", key="btn_stepwise"):
-                feats_sw = stepwise_select_features(
-                    X_train, y_train, X_val, y_val,
-                    max_features=max_feats
-                )
-                if not feats_sw:
-                    st.warning("Stepwise did not find any feature that improves AUC over baseline.")
-                else:
-                    st.write("**Selected features:**", ", ".join(feats_sw))
-
-                    model = LogisticRegression(
-                        max_iter=1000,
-                        solver="liblinear",
-                        class_weight="balanced"
-                    )
-                    model.fit(X_train[feats_sw], y_train)
-
-                    probs = model.predict_proba(X_test[feats_sw])[:, 1]
-                    preds = (probs >= 0.5).astype(int)
-
-                    auc = roc_auc_score(y_test, probs)
-                    acc = accuracy_score(y_test, preds)
-                    f1 = f1_score(y_test, preds)
-                    cm = confusion_matrix(y_test, preds, labels=[0, 1])
-
-                    st.write(
-                        f"**Test AUC:** {auc:.4f} · "
-                        f"**Accuracy:** {acc:.4f} · "
-                        f"**F1-score:** {f1:.4f}"
-                    )
-                    st.write("Confusion matrix (rows = true, cols = predicted):")
-                    cm_df = pd.DataFrame(
-                        cm,
-                        index=["True 0", "True 1"],
-                        columns=["Pred 0", "Pred 1"]
-                    )
-                    st.dataframe(cm_df, use_container_width=True)
-    # --- NEW: Decision Tree model + Tree-selected Logistic Regression (hybrid) ---
-    with st.expander("🌳 Decision Tree model + Tree-selected Logistic Regression", expanded=False):
-        d_model2 = build_model_matrix(df)
-        if d_model2.empty:
-            st.info("Not enough numeric features or valid target for tree-based modeling.")
-        else:
-            from sklearn.model_selection import train_test_split
-            from sklearn.tree import DecisionTreeClassifier
-            from sklearn.linear_model import LogisticRegression
-            from sklearn.metrics import (
-                roc_auc_score, accuracy_score, f1_score
-            )
-
-            X = d_model2.drop(columns=["target"])
-            y = d_model2["target"].astype(int)
-
+            # Single train/test split (uses the same test_size & random_state from the UI)
             X_train, X_test, y_train, y_test = train_test_split(
                 X, y,
                 test_size=test_size,
@@ -1112,25 +889,75 @@ with tab_cv:
                 stratify=y
             )
 
-                        # Safe slider bounds here as well
-            feat_cap2 = X.shape[1]
-            min_val2 = 1 if feat_cap2 < 3 else 3
-            max_val2 = min(20, feat_cap2)
-            default_val2 = min(10, feat_cap2)
+            st.markdown(f"**Number of numeric features used for modeling:** {X.shape[1]}")
 
-            max_feats_tree = st.slider(
-                "Maximum number of features from decision tree",
-                min_value=min_val2,
-                max_value=max_val2,
-                value=default_val2,
-                key="tree_max_feats"
+            # ---------- A. Baseline Logistic Regression ----------
+            st.markdown("### A. Baseline Logistic Regression")
+
+            C_logit = st.slider(
+                "Regularization strength C (Logit)",
+                min_value=0.01,
+                max_value=10.0,
+                value=1.0,
+                step=0.01,
+                key="baseline_logit_C"
+            )
+            balance_logit = st.checkbox(
+                "Use class_weight='balanced' for Logit",
+                value=True,
+                key="baseline_logit_balanced"
             )
 
-            if st.button("Run Decision Tree + Tree-selected Logit", key="btn_tree_logit"):
-                # 1) Pure decision tree model
+            if st.button("Run baseline Logistic Regression", key="btn_baseline_logit"):
+                logit_pipe = Pipeline([
+                    ("scaler", StandardScaler()),
+                    ("logit", LogisticRegression(
+                        C=C_logit,
+                        class_weight=("balanced" if balance_logit else None),
+                        max_iter=1000,
+                        solver="liblinear",
+                    )),
+                ])
+                logit_pipe.fit(X_train, y_train)
+
+                probs_logit = logit_pipe.predict_proba(X_test)[:, 1]
+                preds_logit = (probs_logit >= 0.5).astype(int)
+
+                auc_logit = roc_auc_score(y_test, probs_logit)
+                acc_logit = accuracy_score(y_test, preds_logit)
+                f1_logit = f1_score(y_test, preds_logit)
+
+                st.write(
+                    f"**Logit — Test AUC:** {auc_logit:.4f} · "
+                    f"**Accuracy:** {acc_logit:.4f} · "
+                    f"**F1-score (thr=0.5):** {f1_logit:.4f}"
+                )
+
+            st.divider()
+
+            # ---------- B. Decision Tree (standalone) ----------
+            st.markdown("### B. Decision Tree (rule-based model)")
+
+            max_depth_tree = st.slider(
+                "Max depth (Decision Tree)",
+                min_value=2,
+                max_value=15,
+                value=5,
+                key="tree_max_depth_main"
+            )
+            min_leaf_tree = st.slider(
+                "Minimum samples per leaf (Decision Tree)",
+                min_value=10,
+                max_value=200,
+                value=50,
+                step=10,
+                key="tree_min_leaf_main"
+            )
+
+            if st.button("Run Decision Tree model", key="btn_tree_alone"):
                 tree_clf = DecisionTreeClassifier(
-                    max_depth=5,
-                    min_samples_leaf=50,
+                    max_depth=max_depth_tree,
+                    min_samples_leaf=min_leaf_tree,
                     random_state=int(random_state),
                 )
                 tree_clf.fit(X_train, y_train)
@@ -1142,7 +969,39 @@ with tab_cv:
                 acc_tree = accuracy_score(y_test, preds_tree)
                 f1_tree = f1_score(y_test, preds_tree)
 
-                # 2) Tree-based feature selection → Logit
+                st.write(
+                    f"**Decision Tree — Test AUC:** {auc_tree:.4f} · "
+                    f"**Accuracy:** {acc_tree:.4f} · "
+                    f"**F1-score (thr=0.5):** {f1_tree:.4f}"
+                )
+
+            st.divider()
+
+            # ---------- C. Hybrid Model: Tree-selected Logistic Regression ----------
+            st.markdown("### C. Hybrid Model — Tree-selected Logistic Regression")
+            st.caption(
+                "Step 1: Use a Decision Tree to find the most important features. "
+                "Step 2: Train a Logistic Regression only on those features to get an interpretable model."
+            )
+
+            max_feats_tree = st.slider(
+                "Maximum number of features selected from the tree",
+                min_value=3,
+                max_value=min(20, X.shape[1]),
+                value=min(10, X.shape[1]),
+                key="tree_hybrid_max_feats"
+            )
+
+            if st.button("Run Hybrid Model (Tree → Logit)", key="btn_tree_logit_hybrid"):
+                # 1) Tree to select features
+                tree_clf2 = DecisionTreeClassifier(
+                    max_depth=5,
+                    min_samples_leaf=50,
+                    random_state=int(random_state),
+                )
+                tree_clf2.fit(X_train, y_train)
+
+                # Use existing helper to select important features
                 feats_tree = tree_select_features(
                     X_train, y_train,
                     max_features=max_feats_tree,
@@ -1150,44 +1009,118 @@ with tab_cv:
                 )
 
                 if not feats_tree:
-                    st.warning("Tree did not select any informative features.")
+                    st.warning("The decision tree did not select any informative features.")
                 else:
-                    st.write("**Tree-selected features for Logit:**", ", ".join(feats_tree))
+                    st.write("**Features selected by the Decision Tree:**", ", ".join(feats_tree))
 
-                    logit = LogisticRegression(
-                        max_iter=1000,
-                        solver="liblinear",
-                        class_weight="balanced"
-                    )
-                    logit.fit(X_train[feats_tree], y_train)
-
-                    probs_logit = logit.predict_proba(X_test[feats_tree])[:, 1]
-                    preds_logit = (probs_logit >= 0.5).astype(int)
-
-                    auc_logit = roc_auc_score(y_test, probs_logit)
-                    acc_logit = accuracy_score(y_test, preds_logit)
-                    f1_logit = f1_score(y_test, preds_logit)
-
-                    comp = pd.DataFrame([
-                        {"model": "Decision Tree",
-                         "AUC": auc_tree,
-                         "Accuracy": acc_tree,
-                         "F1": f1_tree},
-                        {"model": "Tree-selected Logit",
-                         "AUC": auc_logit,
-                         "Accuracy": acc_logit,
-                         "F1": f1_logit},
+                    # 2) Logistic regression on tree-selected features
+                    hybrid_pipe = Pipeline([
+                        ("scaler", StandardScaler()),
+                        ("logit", LogisticRegression(
+                            C=1.0,
+                            class_weight="balanced",
+                            max_iter=1000,
+                            solver="liblinear",
+                        )),
                     ])
+                    hybrid_pipe.fit(X_train[feats_tree], y_train)
 
-                    st.subheader("Model comparison (test set)")
+                    probs_hybrid = hybrid_pipe.predict_proba(X_test[feats_tree])[:, 1]
+                    preds_hybrid = (probs_hybrid >= 0.5).astype(int)
+
+                    auc_hybrid = roc_auc_score(y_test, probs_hybrid)
+                    acc_hybrid = accuracy_score(y_test, preds_hybrid)
+                    f1_hybrid = f1_score(y_test, preds_hybrid)
+
+                    # Build comparison table
+                    comp_rows = [
+                        {"Model": "Baseline Logit (all features)", "AUC": None, "Accuracy": None, "F1": None},
+                        {"Model": "Decision Tree", "AUC": None, "Accuracy": None, "F1": None},
+                        {"Model": "Hybrid (Tree-selected Logit)", "AUC": auc_hybrid, "Accuracy": acc_hybrid, "F1": f1_hybrid},
+                    ]
+                    comp_df = pd.DataFrame(comp_rows)
+
+                    st.write(
+                        f"**Hybrid — Test AUC:** {auc_hybrid:.4f} · "
+                        f"**Accuracy:** {acc_hybrid:.4f} · "
+                        f"**F1-score (thr=0.5):** {f1_hybrid:.4f}"
+                    )
+
+                    st.subheader("Hybrid vs other models (AUC / Accuracy / F1)")
                     st.dataframe(
-                        comp.style.format(
+                        comp_df.style.format(
                             {"AUC": "{:.4f}", "Accuracy": "{:.4f}", "F1": "{:.4f}"}
                         ),
                         use_container_width=True
                     )
 
+            # ---------- D. (Optional) Advanced: Forward Stepwise + Logit ----------
+            with st.expander("Advanced: Forward stepwise feature selection + Logistic Regression"):
+                d_model_sw = build_model_matrix(df)
+                if d_model_sw.empty:
+                    st.info("Not enough numeric features or valid target to run stepwise selection.")
+                else:
+                    from sklearn.model_selection import train_test_split as tts
+
+                    X_sw = d_model_sw.drop(columns=["target"])
+                    y_sw = d_model_sw["target"].astype(int)
+
+                    # train / val / test split (uses same test_size & random_state)
+                    X_train_sw, X_temp_sw, y_train_sw, y_temp_sw = tts(
+                        X_sw, y_sw,
+                        test_size=test_size,
+                        random_state=int(random_state),
+                        stratify=y_sw
+                    )
+                    X_val_sw, X_test_sw, y_val_sw, y_test_sw = tts(
+                        X_temp_sw, y_temp_sw,
+                        test_size=0.5,
+                        random_state=int(random_state),
+                        stratify=y_temp_sw
+                    )
+
+                    st.write(f"Feature pool size for stepwise: **{X_sw.shape[1]}** numeric columns.")
+
+                    max_feats_sw = st.slider(
+                        "Maximum number of features to select (stepwise)",
+                        min_value=3,
+                        max_value=min(20, X_sw.shape[1]),
+                        value=min(10, X_sw.shape[1]),
+                        key="stepwise_max_feats_main"
+                    )
+
+                    if st.button("Run stepwise + Logit", key="btn_stepwise_main"):
+                        feats_sw = stepwise_select_features(
+                            X_train_sw, y_train_sw, X_val_sw, y_val_sw,
+                            max_features=max_feats_sw
+                        )
+                        if not feats_sw:
+                            st.warning("Stepwise did not find any feature that improves AUC over baseline.")
+                        else:
+                            st.write("**Stepwise-selected features:**", ", ".join(feats_sw))
+
+                            model_sw = LogisticRegression(
+                                max_iter=1000,
+                                solver="liblinear",
+                                class_weight="balanced"
+                            )
+                            model_sw.fit(X_train_sw[feats_sw], y_train_sw)
+
+                            probs_sw = model_sw.predict_proba(X_test_sw[feats_sw])[:, 1]
+                            preds_sw = (probs_sw >= 0.5).astype(int)
+
+                            auc_sw = roc_auc_score(y_test_sw, probs_sw)
+                            acc_sw = accuracy_score(y_test_sw, preds_sw)
+                            f1_sw = f1_score(y_test_sw, preds_sw)
+
+                            st.write(
+                                f"**Stepwise Logit — Test AUC:** {auc_sw:.4f} · "
+                                f"**Accuracy:** {acc_sw:.4f} · "
+                                f"**F1-score (thr=0.5):** {f1_sw:.4f}"
+                            )
+
     st.markdown('</div>', unsafe_allow_html=True)
+
 
 
 # ========== Logit (own tab) ==========
