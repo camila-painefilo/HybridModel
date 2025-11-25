@@ -10,7 +10,7 @@ import streamlit as st
 import altair as alt
 
 # -------------------- Page & Theme --------------------
-st.set_page_config(page_title="Lending Club Dashboard", page_icon="💳", layout="wide")
+st.set_page_config(page_title="Hybrid Model Agent", page_icon="💳", layout="wide")
 alt.data_transformers.disable_max_rows()
 pd.set_option("display.max_columns", 200)
 
