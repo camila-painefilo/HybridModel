@@ -27,8 +27,8 @@ section.main > div { padding-top: 1rem; }
 st.markdown(CSS, unsafe_allow_html=True)
 
 # -------------------- HERO --------------------
-TITLE = "Lending Club Credit Dashboard"
-SUBTITLE = "Explore distributions, correlations, and a simple logit model (fast & clean)"
+TITLE = "Hybrid Model Agent"
+SUBTITLE = "Unified EDA, statistical tests, and predictive modeling in one intelligent agent"
 LOGO_URL = "https://github.com/altyn02/lending_club/releases/download/lending_photo/lending.webp"
 
 st.markdown(
