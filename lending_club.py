@@ -8,6 +8,15 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 import altair as alt
+from scipy import stats
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LogisticRegression
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.metrics import roc_auc_score, accuracy_score, f1_score
+from sklearn.preprocessing import StandardScaler
+from sklearn.pipeline import Pipeline
+import statsmodels.api as sm
+
 
 # -------------------- Page & Theme --------------------
 st.set_page_config(page_title="Hybrid Model Agent", page_icon="💳", layout="wide")
