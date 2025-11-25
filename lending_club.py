@@ -38,26 +38,34 @@ def main():
     """
     st.markdown(CSS, unsafe_allow_html=True)
 
-    # -------------------- HERO --------------------
-    TITLE = "Hybrid Model Agent"
-    SUBTITLE = "Unified EDA, statistical tests, and predictive modeling in one intelligent agent"
-    LOGO_URL = "https://github.com/altyn02/lending_club/releases/download/lending_photo/lending.webp"
-
-    st.markdown(
-        f"""
-        <div class="hero">
-          <div style="display:flex; align-items:center; gap:20px; flex-wrap:wrap;">
-            <img src="{LOGO_URL}" alt="Logo" style="height:56px; border-radius:8px;">
-            <div>
-              <div style="font-size:2rem;font-weight:800;line-height:1.2;">{TITLE}</div>
-              <div style="opacity:.95; margin-top:6px; font-size:1.05rem;">{SUBTITLE}</div>
+        # -------------------- HERO + WELCOME GATE --------------------
+    if not st.session_state.welcome_done:
+        st.markdown(
+            f"""
+            <div class="hero" style="display:flex;flex-direction:column;align-items:flex-start;gap:16px;">
+              <div style="display:flex; align-items:center; gap:20px; flex-wrap:wrap;">
+                <img src="{LOGO_URL}" alt="Logo" style="height:56px; border-radius:8px;">
+                <div>
+                  <div style="font-size:2rem;font-weight:800;line-height:1.2;">{TITLE}</div>
+                  <div style="opacity:.95; margin-top:6px; font-size:1.05rem;">{SUBTITLE}</div>
+                </div>
+              </div>
+              <div style="margin-top:18px; font-size:1.1rem;">
+                💳 <b>Welcome to the Hybrid Model Agent</b><br>
+                A powerful and intelligent platform for LendingClub prediction, EDA, and hybrid modeling.
+              </div>
             </div>
-          </div>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
-    st.write("")
+            """,
+            unsafe_allow_html=True,
+        )
+
+        start = st.button("🚀 Start the Analysis", key="welcome_start")
+        if start:
+            st.session_state.welcome_done = True
+            st.rerun()
+
+        st.stop()  # stop here on first page
+
 
     # -------------------- 💠 WELCOME PAGE --------------------
     if not st.session_state.welcome_done:
