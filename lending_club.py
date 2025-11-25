@@ -72,16 +72,72 @@ st.markdown("## 2. Analysis settings")
 
 c1, c2, c3 = st.columns([2, 1, 1])
 
+# ------------------------------------------------------------
+# 1) Select the target column
+# ------------------------------------------------------------
 with c1:
     target_col = st.selectbox(
         "Select target (label) column",
         options=df_full.columns,
-        help="For this dashboard, the target should be a binary variable encoded as 0 and 1."
+        help="If the selected column is not binary (0/1), you will be able to map which values correspond to target=1."
     )
 
-# Estandarizamos el nombre para reutilizar todo tu código:
-df_full["target"] = df_full[target_col]
+# Extract raw target values
+target_raw = df_full[target_col]
 
+# Identify unique values (excluding NaN)
+unique_vals = target_raw.dropna().unique()
+
+# Check if column is already binary 0/1
+try:
+    numeric_unique = pd.to_numeric(unique_vals, errors="coerce")
+    is_binary = (
+        len(unique_vals) == 2
+        and set(pd.Series(numeric_unique).dropna().astype(int).unique()) <= {0, 1}
+    )
+except:
+    is_binary = False
+
+# ------------------------------------------------------------
+# CASE 1 — Column already binary (0/1)
+# ------------------------------------------------------------
+if is_binary:
+    df_full["target"] = pd.to_numeric(target_raw, errors="coerce").fillna(0).astype(int)
+    st.sidebar.info("Detected binary target (0/1). Using it as-is.")
+
+# ------------------------------------------------------------
+# CASE 2 — Column NOT binary → let user map the values
+# ------------------------------------------------------------
+else:
+    st.sidebar.markdown("### Configure binary target")
+    st.sidebar.caption("Select which values should be considered BAD (target = 1). Others will be mapped to 0.")
+
+    # Convert values to string for UI, but keep mapping to original values
+    value_labels = [str(v) for v in unique_vals]
+    label_to_value = dict(zip(value_labels, unique_vals))
+
+    # Multiselect UI
+    bad_labels = st.sidebar.multiselect(
+        "Bad class values (target = 1):",
+        options=sorted(value_labels),
+        help="Choose the values that represent default, bad loan, churn, etc."
+    )
+
+    # Require at least one selection
+    if not bad_labels:
+        st.sidebar.warning("Please select at least one value for target=1 to continue.")
+        st.stop()
+
+    bad_values = [label_to_value[l] for l in bad_labels]
+
+    # Create binary target
+    df_full["target"] = df_full[target_col].isin(bad_values).astype(int)
+
+    st.sidebar.success(f"Mapped {len(bad_values)} values to target=1 (bad class).")
+
+# ------------------------------------------------------------
+# 2) Other analysis settings (unchanged)
+# ------------------------------------------------------------
 with c2:
     test_size = st.slider(
         "Test data ratio",
@@ -109,7 +165,7 @@ missing_strategy = st.radio(
     horizontal=True
 )
 
-# ⬇️ ESTO ES EL SLIDER DE LA IMAGEN (열별 결측치 비율 허용 상한%)
+# Max missing rate per column
 max_missing_pct = st.slider(
     "Maximum allowed missing rate per column (%)",
     min_value=0,
@@ -138,6 +194,7 @@ if "issue_year" not in df_full.columns:
         if issue_dt.isna().all():
             issue_dt = pd.to_datetime(df_full["issue_d"], errors="coerce")
         df_full["issue_year"] = issue_dt.dt.year
+
 
 # -------------------- Sidebar Filters --------------------
 with st.sidebar:
