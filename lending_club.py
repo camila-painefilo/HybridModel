@@ -1038,11 +1038,17 @@ with tab_cv:
 
             st.write(f"Feature pool size (after missing-value filter): **{X.shape[1]}** numeric columns.")
 
+                        # Safe slider bounds even when we have very few features
+            feat_cap = X.shape[1]
+            min_val = 1 if feat_cap < 3 else 3
+            max_val = min(20, feat_cap)
+            default_val = min(10, feat_cap)
+
             max_feats = st.slider(
                 "Maximum number of features to select (stepwise)",
-                min_value=3,
-                max_value=min(20, X.shape[1]),
-                value=min(10, X.shape[1]),
+                min_value=min_val,
+                max_value=max_val,
+                value=default_val,
                 key="stepwise_max_feats"
             )
 
@@ -1106,11 +1112,17 @@ with tab_cv:
                 stratify=y
             )
 
+                        # Safe slider bounds here as well
+            feat_cap2 = X.shape[1]
+            min_val2 = 1 if feat_cap2 < 3 else 3
+            max_val2 = min(20, feat_cap2)
+            default_val2 = min(10, feat_cap2)
+
             max_feats_tree = st.slider(
                 "Maximum number of features from decision tree",
-                min_value=3,
-                max_value=min(20, X.shape[1]),
-                value=min(10, X.shape[1]),
+                min_value=min_val2,
+                max_value=max_val2,
+                value=default_val2,
                 key="tree_max_feats"
             )
 
