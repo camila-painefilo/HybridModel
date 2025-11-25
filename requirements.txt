@@ -2,12 +2,9 @@ streamlit==1.41.0
 pandas==2.2.3
 numpy==1.26.4
 scipy==1.13.1
-
 altair==5.4.1
 scikit-learn==1.5.2
-
 statsmodels==0.14.2 
-
 pyLDAvis==3.4.1
 networkx==3.4.1
 matplotlib==3.9.2
@@ -24,5 +21,6 @@ google-auth-oauthlib==1.2.1
 transformers==4.45.2
 tokenizers==0.20.3
 seaborn==0.13.2
+
 
 
