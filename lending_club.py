@@ -64,9 +64,24 @@ if uploaded_file is None:
     st.info("Please upload a CSV file to start the analysis.")
     st.stop()
 
-df_full = load_uploaded_csv(uploaded_file)
-st.success("Data upload and basic preprocessing completed.")
+# Load raw data
+df_raw = load_uploaded_csv(uploaded_file)
+rows_before, cols_before = df_raw.shape
 
+# ✅ Generic cleaning: drop fully empty rows and fully empty columns
+df_full = df_raw.dropna(how="all")          # drop rows where *all* columns are NaN
+df_full = df_full.dropna(axis=1, how="all") # drop columns where *all* rows are NaN
+
+rows_after, cols_after = df_full.shape
+
+removed_rows = rows_before - rows_after
+removed_cols = cols_before - cols_after
+
+msg = "Data upload completed."
+if removed_rows > 0 or removed_cols > 0:
+    msg += f" Removed {removed_rows} completely empty rows and {removed_cols} completely empty columns."
+
+st.success(msg)
 # -------------------- 2. Analysis settings --------------------
 st.markdown("## 2. Analysis settings")
 
