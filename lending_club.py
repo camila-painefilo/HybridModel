@@ -812,7 +812,7 @@ and any binary classification workflow.
                                 "No variables are significant at α = 0.05. "
                                 "Stepwise selection can still be run on all numeric features."
                             )
-                                                    st.markdown("---")
+                        st.markdown("---")
                         st.subheader("Forward stepwise logistic regression (independent of t-tests)")
 
                         # Build modeling matrix for stepwise
