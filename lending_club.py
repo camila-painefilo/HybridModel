@@ -1080,12 +1080,7 @@ and any binary classification workflow.
                                 ),
                                 use_container_width=True
                             )
-        
-                            # (tu bloque de Comparative Analysis se puede quedar igual aquí)
-        
-                    # Stepwise expander (lo puedes dejar tal cual, sin balanceo por ahora)
-                    with st.expander("Advanced: Forward stepwise feature selection + Logistic Regression"):
-                        ...
+
 
                         # 🔥 Final comparative analysis block (professor requirement)
                         from sklearn.metrics import confusion_matrix, precision_score, recall_score
