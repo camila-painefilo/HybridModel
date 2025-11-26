@@ -1218,9 +1218,10 @@ and any binary classification workflow ⚡
                     "Step 1: Use a Decision Tree to find the most important features. "
                     "Step 2: Train a Logistic Regression only on those features."
                 )
+                
                 max_allowed_feats = min(20, X.shape[1])
                 min_allowed_feats = min(3, max_allowed_feats)
-
+                
                 # ⚠️ Guard: when min == max, don't show a slider (it would crash)
                 if max_allowed_feats <= min_allowed_feats:
                     max_feats_tree = max_allowed_feats
@@ -1234,9 +1235,9 @@ and any binary classification workflow ⚡
                         min_value=min_allowed_feats,
                         max_value=max_allowed_feats,
                         value=min_allowed_feats,
-                        key="tree_hybrid_max_feats"
+                        key="tree_hybrid_max_feats",
                     )
-
+                
                 if st.button("Run Hybrid Model (Tree → Logit)", key="btn_tree_logit_hybrid"):
                     tree_clf2 = DecisionTreeClassifier(
                         max_depth=5,
@@ -1245,7 +1246,7 @@ and any binary classification workflow ⚡
                     )
                     # ⭐ fit on balanced train
                     tree_clf2.fit(X_train_model, y_train_model)
-
+                
                     feats_tree = tree_select_features(
                         X_train_model, y_train_model,
                         max_features=max_feats_tree,
@@ -1269,124 +1270,86 @@ and any binary classification workflow ⚡
                         ])
                         # ⭐ use balanced train subset
                         hybrid_pipe.fit(X_train_model[feats_tree], y_train_model)
-
+                
                         probs_hybrid = hybrid_pipe.predict_proba(X_test[feats_tree])[:, 1]
                         preds_hybrid = (probs_hybrid >= 0.5).astype(int)
                         auc_hybrid = roc_auc_score(y_test, probs_hybrid)
                         acc_hybrid = accuracy_score(y_test, preds_hybrid)
                         f1_hybrid = f1_score(y_test, preds_hybrid)
-
-                        # 🧮 Build comparison table from whatever metrics are available
-                        comp_rows = []
-                        
-                        bm = st.session_state.get("baseline_metrics")
-                        tm = st.session_state.get("tree_metrics")
-                        hm = st.session_state.get("hybrid_metrics")
-                        
-                        if bm is not None:
-                            comp_rows.append({
-                                "Model": "Baseline Logit (all features)",
-                                "AUC": bm["AUC"],
-                                "Accuracy": bm["Accuracy"],
-                                "F1": bm["F1"],
-                            })
-                        
-                        if tm is not None:
-                            comp_rows.append({
-                                "Model": "Decision Tree",
-                                "AUC": tm["AUC"],
-                                "Accuracy": tm["Accuracy"],
-                                "F1": tm["F1"],
-                            })
-                        
-                        if hm is not None:
-                            comp_rows.append({
-                                "Model": "Hybrid (Tree-selected Logit)",
-                                "AUC": hm["AUC"],
-                                "Accuracy": hm["Accuracy"],
-                                "F1": hm["F1"],
-                            })
-                        
-                        if comp_rows:
-                            comp_df = pd.DataFrame(comp_rows)
-                            st.subheader("Hybrid vs other models (AUC / Accuracy / F1)")
-                            st.dataframe(
-                                comp_df.style.format(
-                                    {"AUC": "{:.4f}", "Accuracy": "{:.4f}", "F1": "{:.4f}"}
-                                ),
-                                use_container_width=True,
-                            )
-                        else:
-                            st.info("Run at least one model to see comparison metrics.")  
-
-                    # 🔥 Final comparative analysis block (professor requirement)
-                    from sklearn.metrics import precision_score, recall_score
-
-                    st.divider()
-                    st.subheader("📌 Final Comparative Analysis (All Models)")
-
-                    comp_rows_all = []
-
-                    # Baseline Logit
-                    if "preds_logit" in locals():
-                        cm = confusion_matrix(y_test, preds_logit)
-                        comp_rows_all.append({
-                            "Model": "Baseline Logistic Regression",
-                            "AUC": auc_logit,
-                            "Accuracy": acc_logit,
-                            "Precision": precision_score(y_test, preds_logit, zero_division=0),
-                            "Recall": recall_score(y_test, preds_logit, zero_division=0),
-                            "Confusion Matrix": cm
-                        })
-
-                    # Stepwise Logit (only if you later add that model in this tab)
-                    if "preds_sw" in locals():
-                        cm = confusion_matrix(y_test_sw, preds_sw)
-                        comp_rows_all.append({
-                            "Model": "Stepwise Logistic Regression",
-                            "AUC": auc_sw,
-                            "Accuracy": acc_sw,
-                            "Precision": precision_score(y_test_sw, preds_sw, zero_division=0),
-                            "Recall": recall_score(y_test_sw, preds_sw, zero_division=0),
-                            "Confusion Matrix": cm
-                        })
-
-                    # Decision Tree
-                    if "preds_tree" in locals():
-                        cm = confusion_matrix(y_test, preds_tree)
-                        comp_rows_all.append({
-                            "Model": "Decision Tree",
-                            "AUC": auc_tree,
-                            "Accuracy": acc_tree,
-                            "Precision": precision_score(y_test, preds_tree, zero_division=0),
-                            "Recall": recall_score(y_test, preds_tree, zero_division=0),
-                            "Confusion Matrix": cm
-                        })
-
-                    # Hybrid
-                    if "preds_hybrid" in locals():
-                        cm = confusion_matrix(y_test, preds_hybrid)
-                        comp_rows_all.append({
-                            "Model": "Hybrid (Tree → Logit)",
+                
+                        st.write(
+                            f"**Hybrid — Test AUC:** {auc_hybrid:.4f} · "
+                            f"**Accuracy:** {acc_hybrid:.4f} · "
+                            f"**F1-score (thr=0.5):** {f1_hybrid:.4f}"
+                        )
+                
+                        # Confusion matrix — Hybrid Model
+                        cm_hybrid = confusion_matrix(y_test, preds_hybrid)
+                        cm_hybrid_df = pd.DataFrame(
+                            cm_hybrid,
+                            index=["True 0 (good)", "True 1 (bad)"],
+                            columns=["Pred 0 (good)", "Pred 1 (bad)"],
+                        )
+                        st.markdown("**Confusion matrix — Hybrid Model (test set)**")
+                        st.dataframe(cm_hybrid_df, use_container_width=True)
+                
+                        # 🔐 Save hybrid metrics to session_state
+                        st.session_state["hybrid_metrics"] = {
                             "AUC": auc_hybrid,
                             "Accuracy": acc_hybrid,
+                            "F1": f1_hybrid,
                             "Precision": precision_score(y_test, preds_hybrid, zero_division=0),
                             "Recall": recall_score(y_test, preds_hybrid, zero_division=0),
-                            "Confusion Matrix": cm
-                        })
-                    if comp_rows_all:
-                        comp_df_all = pd.DataFrame(comp_rows_all)
-                        # 🔧 Convert confusion matrices to readable text so Streamlit doesn't crash
-                        if "Confusion Matrix" in comp_df_all.columns:
-                            comp_df_all["Confusion Matrix"] = comp_df_all["Confusion Matrix"].apply(
-                                lambda cm: "\n".join(
-                                    [" ".join(map(str, row)) for row in cm]
-                                ) if isinstance(cm, np.ndarray) else cm
-                            )
-                        st.dataframe(comp_df_all, use_container_width=True)
-                        st.success("Comparative analysis completed successfully.")
-                    else:
-                        st.info("Run at least two models to compare them.")
+                            "Confusion Matrix": cm_hybrid,
+                        }
+                
+                # 🔥 Final comparative analysis block (professor requirement)
+                st.divider()
+                st.subheader("📌 Final Comparative Analysis (All Models)")
+                
+                comp_rows_all = []
+                
+                bm = st.session_state.get("baseline_metrics")
+                tm = st.session_state.get("tree_metrics")
+                hm = st.session_state.get("hybrid_metrics")
+                
+                def unpack_cm_row(label, m):
+                    """Build one row (dict) from metrics + confusion matrix."""
+                    cm = m["Confusion Matrix"]          # 2x2 matrix: [[TN, FP], [FN, TP]]
+                    tn, fp, fn, tp = cm.ravel().tolist()
+                    return {
+                        "Model": label,
+                        "AUC": m["AUC"],
+                        "Accuracy": m["Accuracy"],
+                        "Precision": m["Precision"],
+                        "Recall": m["Recall"],
+                        "TN": tn,
+                        "FP": fp,
+                        "FN": fn,
+                        "TP": tp,
+                    }
+                
+                if bm is not None:
+                    comp_rows_all.append(unpack_cm_row("Baseline Logistic Regression", bm))
+                
+                if tm is not None:
+                    comp_rows_all.append(unpack_cm_row("Decision Tree", tm))
+                
+                if hm is not None:
+                    comp_rows_all.append(unpack_cm_row("Hybrid (Tree → Logit)", hm))
+                
+                if comp_rows_all:
+                    comp_df_all = pd.DataFrame(comp_rows_all)
+                    st.dataframe(
+                        comp_df_all.style.format(
+                            {"AUC": "{:.4f}", "Accuracy": "{:.4f}",
+                             "Precision": "{:.4f}", "Recall": "{:.4f}"}
+                        ),
+                        use_container_width=True,
+                    )
+                    st.success("Comparative analysis completed successfully.")
+                else:
+                    st.info("Run at least one model to see comparison metrics.")
 
         st.markdown('</div>', unsafe_allow_html=True)
 
