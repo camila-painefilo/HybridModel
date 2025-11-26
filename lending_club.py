@@ -16,6 +16,7 @@ def main():
     from sklearn.linear_model import LogisticRegression
     from sklearn.tree import DecisionTreeClassifier
     from sklearn.metrics import roc_auc_score, accuracy_score, f1_score
+    from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
     from sklearn.preprocessing import StandardScaler
     from sklearn.pipeline import Pipeline
     import statsmodels.api as sm
@@ -822,6 +823,17 @@ and any binary classification workflow.
                         f"**Accuracy:** {acc_logit:.4f} · "
                         f"**F1-score (thr=0.5):** {f1_logit:.4f}"
                     )
+
+                    # Confusion matrix — Logistic Regression
+                    cm_logit = confusion_matrix(y_test, preds_logit)
+                    cm_logit_df = pd.DataFrame(
+                        cm_logit,
+                        index=["True 0 (good)", "True 1 (bad)"],
+                        columns=["Pred 0 (good)", "Pred 1 (bad)"],
+                    )
+                    st.markdown("**Confusion matrix — Logistic Regression (test set)**")
+                    st.dataframe(cm_logit_df, use_container_width=True)
+
 
                 st.divider()
 
