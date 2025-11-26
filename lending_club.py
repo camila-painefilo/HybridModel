@@ -68,44 +68,45 @@ def main():
     # -------------------- 💠 WELCOME PAGE --------------------
     if not st.session_state.welcome_done:
 
-    st.markdown(
-        f"""
-        <div style='margin-top:40px;'>
-          <div style='display:flex; align-items:center; gap:32px; flex-wrap:wrap;'>
+        st.markdown(
+            """
+<div style='margin-top:40px;'>
+  <div style='display:flex; align-items:center; gap:32px; flex-wrap:wrap;'>
 
-            <!-- IMAGE -->
-            <div>
-              <img src="welcome_image.png"
-                   alt="Welcome illustration"
-                   style="width:240px; border-radius:18px;
-                          box-shadow:0 8px 24px rgba(15,23,42,0.25);">
-            </div>
+    <!-- IMAGE -->
+    <div>
+      <img src="welcome_image.png"
+           alt="Welcome illustration"
+           style="width:240px; border-radius:18px;
+                  box-shadow:0 8px 24px rgba(15,23,42,0.25);">
+    </div>
 
-            <!-- TEXT -->
-            <div style="max-width:600px;">
-              <h1 style='font-size:42px; margin-bottom:12px;'>💳 Welcome to the Hybrid Model Agent</h1>
+    <!-- TEXT -->
+    <div style="max-width:600px;">
+      <h1 style='font-size:42px; margin-bottom:12px;'>💳 Welcome to the Hybrid Model Agent</h1>
 
-              <p style='font-size:20px; color:gray; line-height:1.6;'>
-                A flexible and intelligent platform for tabular data exploration,
-                statistical testing, feature selection, and hybrid predictive modeling.
-                <br><br>
-                Designed for credit scoring, churn prediction, customer analytics,
-                and any binary classification workflow.
-              </p>
-            </div>
+      <p style='font-size:20px; color:gray; line-height:1.6;'>
+        A flexible and intelligent platform for tabular data exploration,
+        statistical testing, feature selection, and hybrid predictive modeling.
+        <br><br>
+        Designed for credit scoring, churn prediction, customer analytics,
+        and any binary classification workflow.
+      </p>
+    </div>
 
-          </div>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
+  </div>
+</div>
+            """,
+            unsafe_allow_html=True
+        )
 
-    start = st.button("🚀 Start the Analysis")
-    if start:
-        st.session_state.welcome_done = True
-        st.rerun()
+        start = st.button("🚀 Start the Analysis")
+        if start:
+            st.session_state.welcome_done = True
+            st.rerun()
 
-    st.stop()  # ⛔ prevents rest of dashboard from loading
+        st.stop()  # ⛔ prevents rest of dashboard from loading
+
 
 
     # -------------------- 1. Data upload --------------------
