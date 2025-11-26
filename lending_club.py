@@ -71,7 +71,7 @@ def main():
             <div style='text-align:center; margin-top:40px;'>
                 <h1 style='font-size:42px;'>💳 Welcome to the Hybrid Model Agent</h1>
                 <p style='font-size:20px; color:gray;'>
-                    A powerful and intelligent platform for LendingClub prediction, EDA, and hybrid modeling.
+                    A flexible platform for tabular data exploration, statistical testing, and hybrid predictive modeling.
                 </p>
             </div>
             """,
