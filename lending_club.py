@@ -844,6 +844,25 @@ and any binary classification workflow.
             else:
                 st.warning("SMOTE will generate synthetic samples for the minority class in the **train** set.")
 
+            st.divider()
+            
+            st.markdown("### ✅ Last balancing result")
+            
+            if "balance_status_msg" in st.session_state:
+                last_msg = st.session_state.balance_status_msg
+                last_counts = st.session_state.balance_status_counts
+            
+                if last_counts is not None:
+                    c0 = last_counts.get(0, 0)
+                    c1 = last_counts.get(1, 0)
+                    st.success(last_msg)
+                    st.caption(f"Balanced TRAIN set → 0: {c0:,} | 1: {c1:,}")
+                else:
+                    st.info(last_msg)
+            else:
+                st.info("Run a model first to apply balancing and see updated counts.")
+
+
         st.markdown('</div>', unsafe_allow_html=True)
             
            # ========== Prediction Models ==========
@@ -879,23 +898,39 @@ and any binary classification workflow.
                             X_train, y_train, random_state=int(random_state)
                         )
                         counts_bal = y_train_model.value_counts().sort_index()
-                        st.success(
+                        msg = (
                             f"✔ Undersampling applied on TRAIN set. "
                             f"New distribution — 0: {counts_bal.get(0,0):,}, "
                             f"1: {counts_bal.get(1,0):,}"
                         )
+                        st.success(msg)
+                    
+                        # ✅ ADD THIS (save for Class Balancing tab)
+                        st.session_state.balance_status_msg = msg
+                        st.session_state.balance_status_counts = dict(counts_bal)
+                        
+                    SMOTE
         
                     elif balance_method == "SMOTE":
                         sm = SMOTE(random_state=int(random_state))
                         X_train_model, y_train_model = sm.fit_resample(X_train, y_train)
                         counts_bal = pd.Series(y_train_model).value_counts().sort_index()
-                        st.success(
+                        msg = (
                             f"✔ SMOTE applied on TRAIN set. "
                             f"New distribution — 0: {counts_bal.get(0,0):,}, "
                             f"1: {counts_bal.get(1,0):,}"
                         )
+                        st.success(msg)
+                    
+                        # ✅ ADD THIS (save for Class Balancing tab)
+                        st.session_state.balance_status_msg = msg
+                        st.session_state.balance_status_counts = dict(counts_bal)
                     else:
-                        st.info("No class balancing applied (using original train split).")
+                        msg = "No class balancing applied (using original train split)."
+                        st.info(msg)
+                    
+                        st.session_state.balance_status_msg = msg
+                        st.session_state.balance_status_counts = None
         
                     # ----------------- A. Baseline Logit -----------------
                     st.markdown("### A. Baseline Logistic Regression")
