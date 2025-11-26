@@ -847,245 +847,245 @@ and any binary classification workflow.
         st.markdown('</div>', unsafe_allow_html=True)
             
            # ========== Prediction Models ==========
-    with tab_pred:
-        st.markdown('<div class="card">', unsafe_allow_html=True)
-        st.subheader("Prediction Models — Logistic Regression, Decision Tree & Hybrid")
-        st.caption("Target legend — 0: good outcome, 1: bad outcome (as defined in the sidebar mapping).")
-    
-        if "target" not in df.columns:
-            st.info("No 'target' column found.")
-        else:
-            d_model = build_model_matrix(df)
-            if d_model.empty:
-                st.info("Not enough numeric features or valid 0/1 target after preprocessing.")
+        with tab_pred:
+            st.markdown('<div class="card">', unsafe_allow_html=True)
+            st.subheader("Prediction Models — Logistic Regression, Decision Tree & Hybrid")
+            st.caption("Target legend — 0: good outcome, 1: bad outcome (as defined in the sidebar mapping).")
+        
+            if "target" not in df.columns:
+                st.info("No 'target' column found.")
             else:
-                X = d_model.drop(columns=["target"])
-                y = d_model["target"].astype(int)
-    
-                X_train, X_test, y_train, y_test = train_test_split(
-                    X, y,
-                    test_size=test_size,
-                    random_state=int(random_state),
-                    stratify=y
-                )
-                st.markdown(f"**Number of numeric features used for modeling:** {X.shape[1]}")
-    
-                # ⭐ NEW: apply class balancing option (TRAIN only)
-                balance_method = st.session_state.get("balance_method", "None")
-                X_train_model, y_train_model = X_train, y_train  # default: no balancing
-    
-                if balance_method == "Undersampling":
-                    X_train_model, y_train_model = undersample_train(
-                        X_train, y_train, random_state=int(random_state)
-                    )
-                    counts_bal = y_train_model.value_counts().sort_index()
-                    st.success(
-                        f"✔ Undersampling applied on TRAIN set. "
-                        f"New distribution — 0: {counts_bal.get(0,0):,}, "
-                        f"1: {counts_bal.get(1,0):,}"
-                    )
-    
-                elif balance_method == "SMOTE":
-                    sm = SMOTE(random_state=int(random_state))
-                    X_train_model, y_train_model = sm.fit_resample(X_train, y_train)
-                    counts_bal = pd.Series(y_train_model).value_counts().sort_index()
-                    st.success(
-                        f"✔ SMOTE applied on TRAIN set. "
-                        f"New distribution — 0: {counts_bal.get(0,0):,}, "
-                        f"1: {counts_bal.get(1,0):,}"
-                    )
+                d_model = build_model_matrix(df)
+                if d_model.empty:
+                    st.info("Not enough numeric features or valid 0/1 target after preprocessing.")
                 else:
-                    st.info("No class balancing applied (using original train split).")
-    
-                # ----------------- A. Baseline Logit -----------------
-                st.markdown("### A. Baseline Logistic Regression")
-                C_logit = st.slider(
-                    "Regularization strength C (Logit)",
-                    min_value=0.01,
-                    max_value=10.0,
-                    value=1.0,
-                    step=0.01,
-                    key="baseline_logit_C"
-                )
-                balance_logit = st.checkbox(
-                    "Use class_weight='balanced' for Logit",
-                    value=True,
-                    key="baseline_logit_balanced"
-                )
-                if st.button("Run baseline Logistic Regression", key="btn_baseline_logit"):
-                    logit_pipe = Pipeline([
-                        ("scaler", StandardScaler()),
-                        ("logit", LogisticRegression(
-                            C=C_logit,
-                            class_weight=("balanced" if balance_logit else None),
-                            max_iter=1000,
-                            solver="liblinear",
-                        )),
-                    ])
-                    # ⭐ CHANGED: use X_train_model / y_train_model
-                    logit_pipe.fit(X_train_model, y_train_model)
-    
-                    probs_logit = logit_pipe.predict_proba(X_test)[:, 1]
-                    preds_logit = (probs_logit >= 0.5).astype(int)
-                    auc_logit = roc_auc_score(y_test, probs_logit)
-                    acc_logit = accuracy_score(y_test, preds_logit)
-                    f1_logit = f1_score(y_test, preds_logit)
-                    st.write(
-                        f"**Logit — Test AUC:** {auc_logit:.4f} · "
-                        f"**Accuracy:** {acc_logit:.4f} · "
-                        f"**F1-score (thr=0.5):** {f1_logit:.4f}"
-                    )
-    
-                    # Confusion matrix — Logistic Regression
-                    cm_logit = confusion_matrix(y_test, preds_logit)
-                    cm_logit_df = pd.DataFrame(
-                        cm_logit,
-                        index=["True 0 (good)", "True 1 (bad)"],
-                        columns=["Pred 0 (good)", "Pred 1 (bad)"],
-                    )
-                    st.markdown("**Confusion matrix — Logistic Regression (test set)**")
-                    st.dataframe(cm_logit_df, use_container_width=True)
-    
-                st.divider()
-    
-                # ----------------- B. Decision Tree -----------------
-                st.markdown("### B. Decision Tree (rule-based model)")
-                max_depth_tree = st.slider(
-                    "Max depth (Decision Tree)",
-                    min_value=2,
-                    max_value=15,
-                    value=5,
-                    key="tree_max_depth_main"
-                )
-                min_leaf_tree = st.slider(
-                    "Minimum samples per leaf (Decision Tree)",
-                    min_value=10,
-                    max_value=200,
-                    value=50,
-                    step=10,
-                    key="tree_min_leaf_main"
-                )
-                if st.button("Run Decision Tree model", key="btn_tree_alone"):
-                    tree_clf = DecisionTreeClassifier(
-                        max_depth=max_depth_tree,
-                        min_samples_leaf=min_leaf_tree,
+                    X = d_model.drop(columns=["target"])
+                    y = d_model["target"].astype(int)
+        
+                    X_train, X_test, y_train, y_test = train_test_split(
+                        X, y,
+                        test_size=test_size,
                         random_state=int(random_state),
+                        stratify=y
                     )
-                    # ⭐ CHANGED: use balanced train
-                    tree_clf.fit(X_train_model, y_train_model)
-    
-                    probs_tree = tree_clf.predict_proba(X_test)[:, 1]
-                    preds_tree = (probs_tree >= 0.5).astype(int)
-                    auc_tree = roc_auc_score(y_test, probs_tree)
-                    acc_tree = accuracy_score(y_test, preds_tree)
-                    f1_tree = f1_score(y_test, preds_tree)
-                    st.write(
-                        f"**Decision Tree — Test AUC:** {auc_tree:.4f} · "
-                        f"**Accuracy:** {acc_tree:.4f} · "
-                        f"**F1-score (thr=0.5):** {f1_tree:.4f}"
-                    )
-    
-                    # Confusion matrix — Decision Tree
-                    cm_tree = confusion_matrix(y_test, preds_tree)
-                    cm_tree_df = pd.DataFrame(
-                        cm_tree,
-                        index=["True 0 (good)", "True 1 (bad)"],
-                        columns=["Pred 0 (good)", "Pred 1 (bad)"],
-                    )
-                    st.markdown("**Confusion matrix — Decision Tree (test set)**")
-                    st.dataframe(cm_tree_df, use_container_width=True)
-    
-                st.divider()
-    
-                # ----------------- C. Hybrid Model -----------------
-                st.markdown("### C. Hybrid Model — Tree-selected Logistic Regression")
-                st.caption(
-                    "Step 1: Use a Decision Tree to find the most important features. "
-                    "Step 2: Train a Logistic Regression only on those features."
-                )
-                max_allowed_feats = min(20, X.shape[1])
-                min_allowed_feats = min(3, max_allowed_feats)
-                max_feats_tree = st.slider(
-                    "Maximum number of features selected from the tree",
-                    min_value=min_allowed_feats,
-                    max_value=max_allowed_feats,
-                    value=min_allowed_feats,
-                    key="tree_hybrid_max_feats"
-                )
-                if st.button("Run Hybrid Model (Tree → Logit)", key="btn_tree_logit_hybrid"):
-                    tree_clf2 = DecisionTreeClassifier(
-                        max_depth=5,
-                        min_samples_leaf=50,
-                        random_state=int(random_state),
-                    )
-                    # ⭐ CHANGED: fit on balanced train
-                    tree_clf2.fit(X_train_model, y_train_model)
-    
-                    feats_tree = tree_select_features(
-                        X_train_model, y_train_model,
-                        max_features=max_feats_tree,
-                        random_state=int(random_state),
-                    )
-                    if not feats_tree:
-                        st.warning("The decision tree did not select any informative features.")
-                    else:
-                        st.write(
-                            f"**Features selected by the Decision Tree** "
-                            f"({len(feats_tree)} features): " + ", ".join(feats_tree)
+                    st.markdown(f"**Number of numeric features used for modeling:** {X.shape[1]}")
+        
+                    # ⭐ NEW: apply class balancing option (TRAIN only)
+                    balance_method = st.session_state.get("balance_method", "None")
+                    X_train_model, y_train_model = X_train, y_train  # default: no balancing
+        
+                    if balance_method == "Undersampling":
+                        X_train_model, y_train_model = undersample_train(
+                            X_train, y_train, random_state=int(random_state)
                         )
-                        hybrid_pipe = Pipeline([
+                        counts_bal = y_train_model.value_counts().sort_index()
+                        st.success(
+                            f"✔ Undersampling applied on TRAIN set. "
+                            f"New distribution — 0: {counts_bal.get(0,0):,}, "
+                            f"1: {counts_bal.get(1,0):,}"
+                        )
+        
+                    elif balance_method == "SMOTE":
+                        sm = SMOTE(random_state=int(random_state))
+                        X_train_model, y_train_model = sm.fit_resample(X_train, y_train)
+                        counts_bal = pd.Series(y_train_model).value_counts().sort_index()
+                        st.success(
+                            f"✔ SMOTE applied on TRAIN set. "
+                            f"New distribution — 0: {counts_bal.get(0,0):,}, "
+                            f"1: {counts_bal.get(1,0):,}"
+                        )
+                    else:
+                        st.info("No class balancing applied (using original train split).")
+        
+                    # ----------------- A. Baseline Logit -----------------
+                    st.markdown("### A. Baseline Logistic Regression")
+                    C_logit = st.slider(
+                        "Regularization strength C (Logit)",
+                        min_value=0.01,
+                        max_value=10.0,
+                        value=1.0,
+                        step=0.01,
+                        key="baseline_logit_C"
+                    )
+                    balance_logit = st.checkbox(
+                        "Use class_weight='balanced' for Logit",
+                        value=True,
+                        key="baseline_logit_balanced"
+                    )
+                    if st.button("Run baseline Logistic Regression", key="btn_baseline_logit"):
+                        logit_pipe = Pipeline([
                             ("scaler", StandardScaler()),
                             ("logit", LogisticRegression(
-                                C=1.0,
-                                class_weight="balanced",
+                                C=C_logit,
+                                class_weight=("balanced" if balance_logit else None),
                                 max_iter=1000,
                                 solver="liblinear",
                             )),
                         ])
-                        # ⭐ CHANGED: use balanced train subset
-                        hybrid_pipe.fit(X_train_model[feats_tree], y_train_model)
-    
-                        probs_hybrid = hybrid_pipe.predict_proba(X_test[feats_tree])[:, 1]
-                        preds_hybrid = (probs_hybrid >= 0.5).astype(int)
-                        auc_hybrid = roc_auc_score(y_test, probs_hybrid)
-                        acc_hybrid = accuracy_score(y_test, preds_hybrid)
-                        f1_hybrid = f1_score(y_test, preds_hybrid)
-    
-                        comp_rows = [
-                            {"Model": "Baseline Logit (all features)", "AUC": None, "Accuracy": None, "F1": None},
-                            {"Model": "Decision Tree", "AUC": None, "Accuracy": None, "F1": None},
-                            {"Model": "Hybrid (Tree-selected Logit)", "AUC": auc_hybrid, "Accuracy": acc_hybrid, "F1": f1_hybrid},
-                        ]
-                        comp_df = pd.DataFrame(comp_rows)
+                        # ⭐ CHANGED: use X_train_model / y_train_model
+                        logit_pipe.fit(X_train_model, y_train_model)
+        
+                        probs_logit = logit_pipe.predict_proba(X_test)[:, 1]
+                        preds_logit = (probs_logit >= 0.5).astype(int)
+                        auc_logit = roc_auc_score(y_test, probs_logit)
+                        acc_logit = accuracy_score(y_test, preds_logit)
+                        f1_logit = f1_score(y_test, preds_logit)
                         st.write(
-                            f"**Hybrid — Test AUC:** {auc_hybrid:.4f} · "
-                            f"**Accuracy:** {acc_hybrid:.4f} · "
-                            f"**F1-score (thr=0.5):** {f1_hybrid:.4f}"
+                            f"**Logit — Test AUC:** {auc_logit:.4f} · "
+                            f"**Accuracy:** {acc_logit:.4f} · "
+                            f"**F1-score (thr=0.5):** {f1_logit:.4f}"
                         )
-    
-                        # Confusion matrix — Hybrid Model
-                        cm_hybrid = confusion_matrix(y_test, preds_hybrid)
-                        cm_hybrid_df = pd.DataFrame(
-                            cm_hybrid,
+        
+                        # Confusion matrix — Logistic Regression
+                        cm_logit = confusion_matrix(y_test, preds_logit)
+                        cm_logit_df = pd.DataFrame(
+                            cm_logit,
                             index=["True 0 (good)", "True 1 (bad)"],
                             columns=["Pred 0 (good)", "Pred 1 (bad)"],
                         )
-                        st.markdown("**Confusion matrix — Hybrid Model (test set)**")
-                        st.dataframe(cm_hybrid_df, use_container_width=True)
-    
-                        st.subheader("Hybrid vs other models (AUC / Accuracy / F1)")
-                        st.dataframe(
-                            comp_df.style.format(
-                                {"AUC": "{:.4f}", "Accuracy": "{:.4f}", "F1": "{:.4f}"}
-                            ),
-                            use_container_width=True
+                        st.markdown("**Confusion matrix — Logistic Regression (test set)**")
+                        st.dataframe(cm_logit_df, use_container_width=True)
+        
+                    st.divider()
+        
+                    # ----------------- B. Decision Tree -----------------
+                    st.markdown("### B. Decision Tree (rule-based model)")
+                    max_depth_tree = st.slider(
+                        "Max depth (Decision Tree)",
+                        min_value=2,
+                        max_value=15,
+                        value=5,
+                        key="tree_max_depth_main"
+                    )
+                    min_leaf_tree = st.slider(
+                        "Minimum samples per leaf (Decision Tree)",
+                        min_value=10,
+                        max_value=200,
+                        value=50,
+                        step=10,
+                        key="tree_min_leaf_main"
+                    )
+                    if st.button("Run Decision Tree model", key="btn_tree_alone"):
+                        tree_clf = DecisionTreeClassifier(
+                            max_depth=max_depth_tree,
+                            min_samples_leaf=min_leaf_tree,
+                            random_state=int(random_state),
                         )
-    
-                        # (tu bloque de Comparative Analysis se puede quedar igual aquí)
-    
-                # Stepwise expander (lo puedes dejar tal cual, sin balanceo por ahora)
-                with st.expander("Advanced: Forward stepwise feature selection + Logistic Regression"):
-                    ...
+                        # ⭐ CHANGED: use balanced train
+                        tree_clf.fit(X_train_model, y_train_model)
+        
+                        probs_tree = tree_clf.predict_proba(X_test)[:, 1]
+                        preds_tree = (probs_tree >= 0.5).astype(int)
+                        auc_tree = roc_auc_score(y_test, probs_tree)
+                        acc_tree = accuracy_score(y_test, preds_tree)
+                        f1_tree = f1_score(y_test, preds_tree)
+                        st.write(
+                            f"**Decision Tree — Test AUC:** {auc_tree:.4f} · "
+                            f"**Accuracy:** {acc_tree:.4f} · "
+                            f"**F1-score (thr=0.5):** {f1_tree:.4f}"
+                        )
+        
+                        # Confusion matrix — Decision Tree
+                        cm_tree = confusion_matrix(y_test, preds_tree)
+                        cm_tree_df = pd.DataFrame(
+                            cm_tree,
+                            index=["True 0 (good)", "True 1 (bad)"],
+                            columns=["Pred 0 (good)", "Pred 1 (bad)"],
+                        )
+                        st.markdown("**Confusion matrix — Decision Tree (test set)**")
+                        st.dataframe(cm_tree_df, use_container_width=True)
+        
+                    st.divider()
+        
+                    # ----------------- C. Hybrid Model -----------------
+                    st.markdown("### C. Hybrid Model — Tree-selected Logistic Regression")
+                    st.caption(
+                        "Step 1: Use a Decision Tree to find the most important features. "
+                        "Step 2: Train a Logistic Regression only on those features."
+                    )
+                    max_allowed_feats = min(20, X.shape[1])
+                    min_allowed_feats = min(3, max_allowed_feats)
+                    max_feats_tree = st.slider(
+                        "Maximum number of features selected from the tree",
+                        min_value=min_allowed_feats,
+                        max_value=max_allowed_feats,
+                        value=min_allowed_feats,
+                        key="tree_hybrid_max_feats"
+                    )
+                    if st.button("Run Hybrid Model (Tree → Logit)", key="btn_tree_logit_hybrid"):
+                        tree_clf2 = DecisionTreeClassifier(
+                            max_depth=5,
+                            min_samples_leaf=50,
+                            random_state=int(random_state),
+                        )
+                        # ⭐ CHANGED: fit on balanced train
+                        tree_clf2.fit(X_train_model, y_train_model)
+        
+                        feats_tree = tree_select_features(
+                            X_train_model, y_train_model,
+                            max_features=max_feats_tree,
+                            random_state=int(random_state),
+                        )
+                        if not feats_tree:
+                            st.warning("The decision tree did not select any informative features.")
+                        else:
+                            st.write(
+                                f"**Features selected by the Decision Tree** "
+                                f"({len(feats_tree)} features): " + ", ".join(feats_tree)
+                            )
+                            hybrid_pipe = Pipeline([
+                                ("scaler", StandardScaler()),
+                                ("logit", LogisticRegression(
+                                    C=1.0,
+                                    class_weight="balanced",
+                                    max_iter=1000,
+                                    solver="liblinear",
+                                )),
+                            ])
+                            # ⭐ CHANGED: use balanced train subset
+                            hybrid_pipe.fit(X_train_model[feats_tree], y_train_model)
+        
+                            probs_hybrid = hybrid_pipe.predict_proba(X_test[feats_tree])[:, 1]
+                            preds_hybrid = (probs_hybrid >= 0.5).astype(int)
+                            auc_hybrid = roc_auc_score(y_test, probs_hybrid)
+                            acc_hybrid = accuracy_score(y_test, preds_hybrid)
+                            f1_hybrid = f1_score(y_test, preds_hybrid)
+        
+                            comp_rows = [
+                                {"Model": "Baseline Logit (all features)", "AUC": None, "Accuracy": None, "F1": None},
+                                {"Model": "Decision Tree", "AUC": None, "Accuracy": None, "F1": None},
+                                {"Model": "Hybrid (Tree-selected Logit)", "AUC": auc_hybrid, "Accuracy": acc_hybrid, "F1": f1_hybrid},
+                            ]
+                            comp_df = pd.DataFrame(comp_rows)
+                            st.write(
+                                f"**Hybrid — Test AUC:** {auc_hybrid:.4f} · "
+                                f"**Accuracy:** {acc_hybrid:.4f} · "
+                                f"**F1-score (thr=0.5):** {f1_hybrid:.4f}"
+                            )
+        
+                            # Confusion matrix — Hybrid Model
+                            cm_hybrid = confusion_matrix(y_test, preds_hybrid)
+                            cm_hybrid_df = pd.DataFrame(
+                                cm_hybrid,
+                                index=["True 0 (good)", "True 1 (bad)"],
+                                columns=["Pred 0 (good)", "Pred 1 (bad)"],
+                            )
+                            st.markdown("**Confusion matrix — Hybrid Model (test set)**")
+                            st.dataframe(cm_hybrid_df, use_container_width=True)
+        
+                            st.subheader("Hybrid vs other models (AUC / Accuracy / F1)")
+                            st.dataframe(
+                                comp_df.style.format(
+                                    {"AUC": "{:.4f}", "Accuracy": "{:.4f}", "F1": "{:.4f}"}
+                                ),
+                                use_container_width=True
+                            )
+        
+                            # (tu bloque de Comparative Analysis se puede quedar igual aquí)
+        
+                    # Stepwise expander (lo puedes dejar tal cual, sin balanceo por ahora)
+                    with st.expander("Advanced: Forward stepwise feature selection + Logistic Regression"):
+                        ...
 
                         # 🔥 Final comparative analysis block (professor requirement)
                         from sklearn.metrics import confusion_matrix, precision_score, recall_score
