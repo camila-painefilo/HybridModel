@@ -65,45 +65,35 @@ def main():
 
     st.write("")
 
-   # -------------------- 💠 WELCOME PAGE --------------------
-if not st.session_state.welcome_done:
+    # -------------------- 💠 WELCOME PAGE --------------------
+    if not st.session_state.welcome_done:
 
-    welcome_html = """<div style='margin-top:40px;'>
-  <div style='display:flex; align-items:center; gap:32px; flex-wrap:wrap;'>
+        col1, col2 = st.columns([1, 2])
 
-    <!-- IMAGE -->
-    <div>
-      <img src="welcome_image.png"
-           alt="Welcome illustration"
-           style="width:240px; border-radius:18px; box-shadow:0 8px 24px rgba(15,23,42,0.25);">
-    </div>
+        with col1:
+            # Imagen local en el mismo repo: welcome_image.png
+            st.image("welcome_image.png", use_column_width=True)
 
-    <!-- TEXT -->
-    <div style="max-width:600px;">
-      <h1 style='font-size:42px; margin-bottom:12px;'>💳 Welcome to the Hybrid Model Agent</h1>
+        with col2:
+            st.markdown("## 💳 Welcome to the Hybrid Model Agent")
+            st.markdown(
+                """
+A flexible and intelligent platform for tabular data exploration,  
+statistical testing, feature selection, and hybrid predictive modeling.  
 
-      <p style='font-size:20px; color:gray; line-height:1.6;'>
-        A flexible and intelligent platform for tabular data exploration,
-        statistical testing, feature selection, and hybrid predictive modeling.
-        <br><br>
-        Designed for credit scoring, churn prediction, customer analytics,
-        and any binary classification workflow.
-      </p>
-    </div>
+Designed for credit scoring, churn prediction, customer analytics,  
+and any binary classification workflow.
+                """
+            )
 
-  </div>
-</div>"""
+        start = st.button("🚀 Start the Analysis")
+        if start:
+            st.session_state.welcome_done = True
+            st.rerun()
 
-    st.markdown(welcome_html, unsafe_allow_html=True)
+        st.stop()  # ⛔ prevents rest of dashboard from loading
 
-    start = st.button("🚀 Start the Analysis")
-    if start:
-        st.session_state.welcome_done = True
-        st.rerun()
-
-    st.stop()  # ⛔ prevents rest of dashboard from loading
-
-
+  
     # -------------------- 1. Data upload --------------------
     st.markdown("## 1. Data upload")
     uploaded_file = st.file_uploader(
