@@ -108,7 +108,6 @@ def main():
         st.stop()  # ⛔ prevents rest of dashboard from loading
 
 
-
     # -------------------- 1. Data upload --------------------
     st.markdown("## 1. Data upload")
     uploaded_file = st.file_uploader(
