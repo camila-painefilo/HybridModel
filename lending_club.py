@@ -66,8 +66,7 @@ def main():
     st.write("")
 
     # -------------------- 💠 WELCOME PAGE --------------------
-    # -------------------- 💠 WELCOME PAGE --------------------
-if not st.session_state.welcome_done:
+    if not st.session_state.welcome_done:
 
     st.markdown(
         f"""
@@ -107,6 +106,7 @@ if not st.session_state.welcome_done:
         st.rerun()
 
     st.stop()  # ⛔ prevents rest of dashboard from loading
+
 
     # -------------------- 1. Data upload --------------------
     st.markdown("## 1. Data upload")
