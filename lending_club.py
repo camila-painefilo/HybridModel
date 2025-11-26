@@ -909,8 +909,6 @@ and any binary classification workflow.
                         st.session_state.balance_status_msg = msg
                         st.session_state.balance_status_counts = dict(counts_bal)
                         
-                    SMOTE
-        
                     elif balance_method == "SMOTE":
                         sm = SMOTE(random_state=int(random_state))
                         X_train_model, y_train_model = sm.fit_resample(X_train, y_train)
