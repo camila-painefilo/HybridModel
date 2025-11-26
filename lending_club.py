@@ -1138,6 +1138,17 @@ and any binary classification workflow ⚡
                     st.markdown("**Confusion matrix — Logistic Regression (test set)**")
                     st.dataframe(cm_logit_df, use_container_width=True)
 
+                    # 🔐 Save baseline metrics to session_state
+                    st.session_state["baseline_metrics"] = {
+                        "AUC": auc_logit,
+                        "Accuracy": acc_logit,
+                        "F1": f1_logit,
+                        "Precision": precision_score(y_test, preds_logit, zero_division=0),
+                        "Recall": recall_score(y_test, preds_logit, zero_division=0),
+                        "Confusion Matrix": cm_logit,
+                    }
+
+
                 st.divider()
 
                 # ----------------- B. Decision Tree -----------------
@@ -1186,6 +1197,16 @@ and any binary classification workflow ⚡
                     )
                     st.markdown("**Confusion matrix — Decision Tree (test set)**")
                     st.dataframe(cm_tree_df, use_container_width=True)
+
+                    # 🔐 Save tree metrics to session_state
+                    st.session_state["tree_metrics"] = {
+                        "AUC": auc_tree,
+                        "Accuracy": acc_tree,
+                        "F1": f1_tree,
+                        "Precision": precision_score(y_test, preds_tree, zero_division=0),
+                        "Recall": recall_score(y_test, preds_tree, zero_division=0),
+                        "Confusion Matrix": cm_tree,
+                    }
 
                 st.divider()
 
@@ -1253,35 +1274,48 @@ and any binary classification workflow ⚡
                         acc_hybrid = accuracy_score(y_test, preds_hybrid)
                         f1_hybrid = f1_score(y_test, preds_hybrid)
 
-                        comp_rows = [
-                            {"Model": "Baseline Logit (all features)", "AUC": None, "Accuracy": None, "F1": None},
-                            {"Model": "Decision Tree", "AUC": None, "Accuracy": None, "F1": None},
-                            {"Model": "Hybrid (Tree-selected Logit)", "AUC": auc_hybrid, "Accuracy": acc_hybrid, "F1": f1_hybrid},
-                        ]
-                        comp_df = pd.DataFrame(comp_rows)
-                        st.write(
-                            f"**Hybrid — Test AUC:** {auc_hybrid:.4f} · "
-                            f"**Accuracy:** {acc_hybrid:.4f} · "
-                            f"**F1-score (thr=0.5):** {f1_hybrid:.4f}"
-                        )
-
-                        # Confusion matrix — Hybrid Model
-                        cm_hybrid = confusion_matrix(y_test, preds_hybrid)
-                        cm_hybrid_df = pd.DataFrame(
-                            cm_hybrid,
-                            index=["True 0 (good)", "True 1 (bad)"],
-                            columns=["Pred 0 (good)", "Pred 1 (bad)"],
-                        )
-                        st.markdown("**Confusion matrix — Hybrid Model (test set)**")
-                        st.dataframe(cm_hybrid_df, use_container_width=True)
-
-                        st.subheader("Hybrid vs other models (AUC / Accuracy / F1)")
-                        st.dataframe(
-                            comp_df.style.format(
-                                {"AUC": "{:.4f}", "Accuracy": "{:.4f}", "F1": "{:.4f}"}
-                            ),
-                            use_container_width=True
-                        )
+                        # 🧮 Build comparison table from whatever metrics are available
+                        comp_rows = []
+                        
+                        bm = st.session_state.get("baseline_metrics")
+                        tm = st.session_state.get("tree_metrics")
+                        hm = st.session_state.get("hybrid_metrics")
+                        
+                        if bm is not None:
+                            comp_rows.append({
+                                "Model": "Baseline Logit (all features)",
+                                "AUC": bm["AUC"],
+                                "Accuracy": bm["Accuracy"],
+                                "F1": bm["F1"],
+                            })
+                        
+                        if tm is not None:
+                            comp_rows.append({
+                                "Model": "Decision Tree",
+                                "AUC": tm["AUC"],
+                                "Accuracy": tm["Accuracy"],
+                                "F1": tm["F1"],
+                            })
+                        
+                        if hm is not None:
+                            comp_rows.append({
+                                "Model": "Hybrid (Tree-selected Logit)",
+                                "AUC": hm["AUC"],
+                                "Accuracy": hm["Accuracy"],
+                                "F1": hm["F1"],
+                            })
+                        
+                        if comp_rows:
+                            comp_df = pd.DataFrame(comp_rows)
+                            st.subheader("Hybrid vs other models (AUC / Accuracy / F1)")
+                            st.dataframe(
+                                comp_df.style.format(
+                                    {"AUC": "{:.4f}", "Accuracy": "{:.4f}", "F1": "{:.4f}"}
+                                ),
+                                use_container_width=True,
+                            )
+                        else:
+                            st.info("Run at least one model to see comparison metrics.")  
 
                     # 🔥 Final comparative analysis block (professor requirement)
                     from sklearn.metrics import precision_score, recall_score
