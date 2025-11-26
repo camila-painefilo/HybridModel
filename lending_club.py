@@ -72,7 +72,7 @@ def main():
 
         with col1:
             # Imagen local en el mismo repo: welcome_image.png
-            st.image("welcome_image.png", use_column_width=True)
+            st.image("welcome_image.png", width=180)
 
         with col2:
             st.markdown("## 💳 Welcome to the Hybrid Model Agent")
