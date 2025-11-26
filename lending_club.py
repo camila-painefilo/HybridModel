@@ -79,11 +79,11 @@ def main():
             st.markdown("## 💳 Welcome to the Hybrid Model Agent")
             st.markdown(
                 """
-A flexible and intelligent platform for tabular data exploration,  
-statistical testing, feature selection, and hybrid predictive modeling.  
+A flexible and intelligent platform for tabular data exploration 📊,
+statistical testing 📏, feature selection 🎯, and hybrid predictive modeling 🤖.
 
-Designed for credit scoring, churn prediction, customer analytics,  
-and any binary classification workflow.
+Designed for credit scoring 💳, churn prediction 🔄, customer analytics 👥,
+and any binary classification workflow ⚡
                 """
             )
 
@@ -723,10 +723,11 @@ and any binary classification workflow.
 
         st.markdown('</div>', unsafe_allow_html=True)
 
-    # ========== T-tests ==========
+
+      # ========== T-tests ==========
     with tab_ttest:
         st.markdown('<div class="card">', unsafe_allow_html=True)
-        st.subheader("Welch’s t-tests (0 = Charged Off, 1 = Fully Paid)")
+        st.subheader("F-test + t-tests (student method: p < 0.05)")
 
         if "target" not in df.columns:
             st.info("No 'target' column found.")
@@ -734,83 +735,95 @@ and any binary classification workflow.
             tnum = pd.to_numeric(df["target"], errors="coerce")
             mask_valid = tnum.isin([0, 1])
             if mask_valid.sum() < 2 or tnum[mask_valid].nunique() < 2:
-                st.info("Both target groups must be present to run t-tests.")
+                st.info("Both target groups (0 and 1) must be present to run t-tests.")
             else:
-                VARS = [c for c in EDA_VARS if c in df.columns and pd.api.types.is_numeric_dtype(df[c])]
+                # 🎯 Use ALL numeric predictors (except target), like the student
+                VARS = [
+                    c for c in df.columns
+                    if c != "target" and pd.api.types.is_numeric_dtype(df[c])
+                ]
+
                 if not VARS:
                     st.info("No numeric variables available for t-tests.")
                 else:
-                    apply_fdr = st.checkbox("Apply FDR correction (Benjamini–Hochberg)", value=True)
                     rows_t = []
+                    selected_features = []  # variables finally chosen by t-test (p < 0.05)
+
                     for col in VARS:
                         s = pd.to_numeric(df[col], errors="coerce")
                         d = pd.DataFrame({"y": s, "t": tnum}).dropna()
-                        g0 = d.loc[d["t"] == 0, "y"].values
-                        g1 = d.loc[d["t"] == 1, "y"].values
+
+                        g0 = d.loc[d["t"] == 0, "y"].values  # target = 0
+                        g1 = d.loc[d["t"] == 1, "y"].values  # target = 1
+
                         if len(g0) < 2 or len(g1) < 2:
                             continue
+
                         m0, m1 = np.mean(g0), np.mean(g1)
                         s0, s1 = np.std(g0, ddof=1), np.std(g1, ddof=1)
-                        diff = m1 - m0
-                        tstat, pval = stats.ttest_ind(g1, g0, equal_var=False)
-                        v0, v1 = s0**2, s1**2
-                        se2 = v0/len(g0) + v1/len(g1)
-                        df_welch = (se2**2) / (((v0/len(g0))**2)/(len(g0)-1) + ((v1/len(g1))**2)/(len(g1)-1))
-                        tcrit = stats.t.ppf(0.975, df_welch)
-                        ci_low = diff - tcrit*np.sqrt(se2)
-                        ci_high = diff + tcrit*np.sqrt(se2)
-                        sp2 = (((len(g0)-1)*v0)+((len(g1)-1)*v1)) / (len(g0)+len(g1)-2)
-                        sp = np.sqrt(sp2)
-                        d_cohen = diff / sp if np.isfinite(sp) and sp > 0 else np.nan
-                        J = 1 - (3 / (4*(len(g0)+len(g1)) - 9))
-                        g_hedges = d_cohen * J
+
+                        # 1️⃣ F-test for equality of variances (Levene)
+                        f_stat, f_p = stats.levene(g0, g1)
+
+                        # 2️⃣ t-tests (both versions)
+                        t_eq, p_eq = stats.ttest_ind(g1, g0, equal_var=True)
+                        t_uneq, p_uneq = stats.ttest_ind(g1, g0, equal_var=False)
+
+                        # 3️⃣ choose which t-test to use based on F-test
+                        if f_p >= 0.05:
+                            used_test = "equal_var"
+                            used_t = t_eq
+                            used_p = p_eq
+                        else:
+                            used_test = "unequal_var"
+                            used_t = t_uneq
+                            used_p = p_uneq
+
+                        is_sig = used_p < 0.05
+                        if is_sig:
+                            selected_features.append(col)
+
                         rows_t.append({
                             "variable": col,
-                            "n_0": len(g0), "n_1": len(g1),
-                            "mean_0": m0, "mean_1": m1,
-                            "std_0": s0, "std_1": s1,
-                            "diff_(1-0)": diff,
-                            "t": tstat, "df": df_welch, "p_value": pval,
-                            "cohen_d": d_cohen, "hedges_g": g_hedges,
-                            "ci_low": ci_low, "ci_high": ci_high
+                            "n_0": len(g0),
+                            "n_1": len(g1),
+                            "mean_0": m0,
+                            "mean_1": m1,
+                            "std_0": s0,
+                            "std_1": s1,
+                            "F_stat": f_stat,
+                            "F_p_value": f_p,
+                            "t_equal": t_eq,
+                            "t_equal_p": p_eq,
+                            "t_unequal": t_uneq,
+                            "t_unequal_p": p_uneq,
+                            "used_test": used_test,
+                            "used_p_value": used_p,
+                            "selected(p<0.05)": is_sig,
                         })
+
                     if not rows_t:
                         st.info("No valid data to compute t-tests.")
                     else:
                         res = pd.DataFrame(rows_t)
-                        if apply_fdr:
-                            p = res["p_value"].values
-                            m = len(p)
-                            order = np.argsort(p)
-                            ranks = np.empty_like(order)
-                            ranks[order] = np.arange(1, m+1)
-                            q = p * m / ranks
-                            q_adj = np.minimum.accumulate(q[np.argsort(order)][::-1])[::-1]
-                            res["q_value"] = q_adj
-                            res["significant"] = res["q_value"] < 0.05
-                        else:
-                            res["significant"] = res["p_value"] < 0.05
                         st.dataframe(res, use_container_width=True)
-                        st.caption("Welch’s t-test with 95% CI and effect sizes.")
+                        st.caption(
+                            "F-test decides whether to use equal-variance or unequal-variance t-test. "
+                            "Variables with used p-value < 0.05 are selected."
+                        )
 
-                        # ===== Save t-test significant features for later use =====
-                        if apply_fdr and "q_value" in res.columns:
-                            sig_vars_ttest = res.loc[res["q_value"] < 0.05, "variable"].tolist()
-                        else:
-                            sig_vars_ttest = res.loc[res["p_value"] < 0.05, "variable"].tolist()
+                        # ✅ Save selected features from t-test
+                        st.session_state["ttest_sig_features"] = selected_features
 
-                        st.session_state["ttest_sig_features"] = sig_vars_ttest
-
-                        if sig_vars_ttest:
+                        if selected_features:
                             st.success(
-                                f"{len(sig_vars_ttest)} variables are significant from t-tests "
-                                f"(saved for feature selection)."
+                                f"{len(selected_features)} variables selected by t-tests (p < 0.05)."
                             )
-                            st.caption(", ".join(sig_vars_ttest))
+                            st.caption(", ".join(selected_features))
                         else:
                             st.warning(
                                 "No variables are significant at α = 0.05. "
-                                "As a fallback, stepwise can still be run on all numeric predictors."
+                                "Stepwise will fall back to all numeric predictors."
                             )
 
                         st.markdown("---")
@@ -821,15 +834,15 @@ and any binary classification workflow.
                         if d_model_sw.empty:
                             st.info("Not enough numeric features or valid 0/1 target to run stepwise selection.")
                         else:
-                            # 🎯 Candidate pool: t-test significant vars if available
-                            if sig_vars_ttest:
+                            # 🎯 Candidate pool: t-test-selected vars if available
+                            if selected_features:
                                 candidate_feats = [
-                                    c for c in sig_vars_ttest
+                                    c for c in selected_features
                                     if c in d_model_sw.columns and c != "target"
                                 ]
                                 st.caption(
-                                    f"Stepwise candidate pool: {len(candidate_feats)} variables "
-                                    f"that passed the t-tests."
+                                    f"Stepwise candidate pool: {len(candidate_feats)} "
+                                    f"variables that passed the t-tests."
                                 )
                             else:
                                 # Fallback: all numeric predictors
@@ -898,7 +911,7 @@ and any binary classification workflow.
                                     else:
                                         st.success(
                                             f"Stepwise selected {len(feats_sw)} features "
-                                            f"(from t-test-significant pool if available):\n\n"
+                                            f"(from the t-test-selected pool if available):\n\n"
                                             + ", ".join(feats_sw)
                                         )
 
@@ -917,8 +930,8 @@ and any binary classification workflow.
                                         st.session_state["selected_features_for_modeling"] = final_feats
                                         st.caption("✅ Final feature set saved for the Prediction Models tab.")
 
-                      
         st.markdown('</div>', unsafe_allow_html=True)
+
     # ========== Class Balancing ==========
     with tab_balance:
         st.markdown('<div class="card">', unsafe_allow_html=True)
