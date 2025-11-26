@@ -22,6 +22,8 @@ def main():
     import statsmodels.api as sm
     from pandas.api.types import is_numeric_dtype
     from imblearn.over_sampling import SMOTE
+    from sklearn.metrics import precision_score, recall_score
+
 
     # -------------------- Page & Theme --------------------
     st.set_page_config(page_title="Hybrid Model Agent", page_icon="💳", layout="wide")
