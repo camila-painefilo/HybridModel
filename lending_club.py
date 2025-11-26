@@ -94,7 +94,6 @@ and any binary classification workflow ⚡
 
         st.stop()  # ⛔ prevents rest of dashboard from loading
 
-  
     # -------------------- 1. Data upload --------------------
     st.markdown("## 1. Data upload")
     uploaded_file = st.file_uploader(
@@ -255,7 +254,7 @@ and any binary classification workflow ⚡
 
     # -------------------- Light typing/cleanup --------------------
     def to_float_pct(series: pd.Series) -> pd.Series:
-        s = series.astype(str).str.replace("%","", regex=False).str.replace(",","", regex=False).str.strip()
+        s = series.astype(str).str.replace("%", "", regex=False).str.replace(",", "", regex=False).str.strip()
         s = s.str.extract(r"([-+]?\d*\.?\d+)", expand=False)
         return pd.to_numeric(s, errors="coerce")
 
@@ -277,7 +276,12 @@ and any binary classification workflow ⚡
         if "issue_year" in df_full.columns and df_full["issue_year"].notna().any():
             years = pd.to_numeric(df_full["issue_year"], errors="coerce").dropna().astype(int)
             min_year, max_year = int(years.min()), int(years.max())
-            year_range = st.slider("Filter by Issue Year", min_value=min_year, max_value=max_year, value=(min_year, max_year))
+            year_range = st.slider(
+                "Filter by Issue Year",
+                min_value=min_year,
+                max_value=max_year,
+                value=(min_year, max_year)
+            )
         else:
             st.caption("No issue_year column found — charts won’t filter by year.")
 
@@ -360,9 +364,9 @@ and any binary classification workflow ⚡
     REQUIRED = ["loan_amnt", "int_rate", "delinq_2yrs", "annual_inc", "dti"]
     df_eda = df.copy()
     EDA_VARS = [c for c in REQUIRED if c in df_eda.columns and is_numeric_dtype(df_eda[c])]
-    missing = [c for c in REQUIRED if c not in EDA_VARS]
-    if missing:
-        st.warning("These requested variables are absent or non-numeric in the filtered data: " + ", ".join(missing))
+    missing_req = [c for c in REQUIRED if c not in EDA_VARS]
+    if missing_req:
+        st.warning("These requested variables are absent or non-numeric in the filtered data: " + ", ".join(missing_req))
 
     def get_featured_vars(df_num, k=6):
         numeric_pool = [c for c in df_num.select_dtypes(include=[np.number]).columns if c != "target"]
@@ -448,33 +452,32 @@ and any binary classification workflow ⚡
         """Random undersampling to make classes equally sized in the TRAIN set."""
         df_tmp = X.copy()
         df_tmp["__target__"] = y.values
-        
+
         counts = df_tmp["__target__"].value_counts()
         min_n = counts.min()
-        
+
         parts = []
         for cls in counts.index:
             part = df_tmp[df_tmp["__target__"] == cls].sample(
                 n=min_n, random_state=random_state
             )
             parts.append(part)
-    
+
         df_bal = pd.concat(parts).sample(frac=1, random_state=random_state)
         y_bal = df_bal["__target__"].astype(int)
         X_bal = df_bal.drop(columns=["__target__"])
         return X_bal, y_bal
- 
+
     # -------------------- Tabs --------------------
     tab_data, tab_dist, tab_corr, tab_ttest, tab_balance, tab_pred, tab_logit = st.tabs([
-    "🧭 Data Exploration",
-    "📈 Data Visualization",
-    "🧮 Correlation Heatmap",
-    "📏 t-Tests & Stepwise",
-    "⚖️ Class Balancing",
-    "🔮 Prediction Models (Hybrid)",
-    "🧠 Model Interpretation"
-])
-
+        "🧭 Data Exploration",
+        "📈 Data Visualization",
+        "🧮 Correlation Heatmap",
+        "📏 t-Tests & Stepwise",
+        "⚖️ Class Balancing",
+        "🔮 Prediction Models (Hybrid)",
+        "🧠 Model Interpretation"
+    ])
 
     # ========== Data Exploration ==========
     with tab_data:
@@ -485,14 +488,14 @@ and any binary classification workflow ⚡
         SAMPLE_N = 10000
         sample = df if len(df) <= SAMPLE_N else df.sample(SAMPLE_N, random_state=42)
 
-        rows, cols = sample.shape
+        rows_s, cols_s = sample.shape
         avg_missing = sample.isna().mean().mean() * 100
 
         c1_, c2_, c3_ = st.columns(3)
         with c1_:
-            st.metric("Rows (sampled)", f"{rows:,}")
+            st.metric("Rows (sampled)", f"{rows_s:,}")
         with c2_:
-            st.metric("Columns", f"{cols}")
+            st.metric("Columns", f"{cols_s}")
         with c3_:
             st.metric("Avg missing (sample)", f"{avg_missing:.2f}%")
 
@@ -519,13 +522,11 @@ and any binary classification workflow ⚡
         st.dataframe(head_df, use_container_width=True)
 
         st.markdown("#### Statistical summary (`describe`)")
-        
         # Numeric summary
         num_sample = sample.select_dtypes(include=["number"])
         if not num_sample.empty:
             st.markdown("##### Numeric summary")
             desc_num = num_sample.describe().T
-            # redondear numéricos
             desc_num = desc_num.round(3)
             st.dataframe(desc_num, use_container_width=True)
 
@@ -542,7 +543,7 @@ and any binary classification workflow ⚡
     with tab_dist:
         st.markdown('<div class="card">', unsafe_allow_html=True)
         st.subheader("Distributions — Histograms, Boxplots & Line")
-        st.caption("🎯 Target legend: 0 = Charged Off, 1 = Fully Paid")
+        st.caption("🎯 Target legend: 0 = good, 1 = bad")
 
         if not EDA_VARS:
             st.info("No suitable numeric columns from the requested list.")
@@ -605,9 +606,11 @@ and any binary classification workflow ⚡
                     else:
                         g = df_line.groupby(["__time__"], observed=False)
 
-                    plot_df = (g[y_var].count().reset_index(name="y")
-                               if agg_choice == "Count"
-                               else g[y_var].agg(agg_func).reset_index(name="y"))
+                    plot_df = (
+                        g[y_var].count().reset_index(name="y")
+                        if agg_choice == "Count"
+                        else g[y_var].agg(agg_func).reset_index(name="y")
+                    )
 
                     enc_color = alt.Color("target:N", title="target") if "target" in plot_df.columns else alt.value(None)
 
@@ -723,8 +726,7 @@ and any binary classification workflow ⚡
 
         st.markdown('</div>', unsafe_allow_html=True)
 
-
-      # ========== T-tests ==========
+    # ========== T-tests & Stepwise ==========
     with tab_ttest:
         st.markdown('<div class="card">', unsafe_allow_html=True)
         st.subheader("F-test + t-tests (student method: p < 0.05)")
@@ -737,7 +739,7 @@ and any binary classification workflow ⚡
             if mask_valid.sum() < 2 or tnum[mask_valid].nunique() < 2:
                 st.info("Both target groups (0 and 1) must be present to run t-tests.")
             else:
-                # 🎯 Use ALL numeric predictors (except target), like the student
+                # 🎯 Use ALL numeric predictors (except target)
                 VARS = [
                     c for c in df.columns
                     if c != "target" and pd.api.types.is_numeric_dtype(df[c])
@@ -880,9 +882,6 @@ and any binary classification workflow ⚡
 
                                 max_allowed_sw = X_sw_all.shape[1]   # allow all features
                                 min_allowed_sw = min(3, max_allowed_sw)
-                                
-                                
-
 
                                 # ⚠️ Avoid slider crash when min == max
                                 if max_allowed_sw <= min_allowed_sw:
@@ -945,7 +944,7 @@ and any binary classification workflow ⚡
         else:
             t_raw = pd.to_numeric(df["target"], errors="coerce")
             counts = t_raw.value_counts().sort_index()
-            
+
             # 🎨 Nice-looking summary box 
             st.markdown("""
             <div style="
@@ -958,16 +957,16 @@ and any binary classification workflow ⚡
                 <b>Current target distribution</b> (0 = good, 1 = bad):
             </div>
             """, unsafe_allow_html=True)
-            
+
             # Two side-by-side cards 
-            c1, c2 = st.columns(2)
-            with c1:
-                st.metric("Class 0 count", f"{counts.get(0,0):,}")
-            with c2:
-                st.metric("Class 1 count", f"{counts.get(1,0):,}")
+            c1b, c2b = st.columns(2)
+            with c1b:
+                st.metric("Class 0 count", f"{counts.get(0, 0):,}")
+            with c2b:
+                st.metric("Class 1 count", f"{counts.get(1, 0):,}")
 
             st.markdown("---")
-            
+
             # Save choice in session
             method = st.radio(
                 "Select balancing method",
@@ -977,7 +976,7 @@ and any binary classification workflow ⚡
                 ),
             )
             st.session_state.balance_method = method
-            
+
             # Explanation message
             if method == "None":
                 st.info("No balancing will be applied. Models will use the original training split.")
@@ -987,13 +986,13 @@ and any binary classification workflow ⚡
                 st.warning("SMOTE will generate synthetic samples for the minority class in the **train** set.")
 
             st.divider()
-            
+
             st.markdown("### ✅ Last balancing result")
-            
+
             if "balance_status_msg" in st.session_state:
                 last_msg = st.session_state.balance_status_msg
                 last_counts = st.session_state.balance_status_counts
-            
+
                 if last_counts is not None:
                     c0 = last_counts.get(0, 0)
                     c1 = last_counts.get(1, 0)
@@ -1004,349 +1003,357 @@ and any binary classification workflow ⚡
             else:
                 st.info("Run a model first to apply balancing and see updated counts.")
 
-
         st.markdown('</div>', unsafe_allow_html=True)
-            
-           # ========== Prediction Models ==========
-        with tab_pred:
-            st.markdown('<div class="card">', unsafe_allow_html=True)
-            st.subheader("Prediction Models — Logistic Regression, Decision Tree & Hybrid")
-            st.caption("Target legend — 0: good outcome, 1: bad outcome (as defined in the sidebar mapping).")
-        
-            if "target" not in df.columns:
-                st.info("No 'target' column found.")
+
+    # ========== Prediction Models ==========
+    with tab_pred:
+        st.markdown('<div class="card">', unsafe_allow_html=True)
+        st.subheader("Prediction Models — Logistic Regression, Decision Tree & Hybrid")
+        st.caption("Target legend — 0: good outcome, 1: bad outcome (as defined in the sidebar mapping).")
+
+        if "target" not in df.columns:
+            st.info("No 'target' column found.")
+        else:
+            d_model = build_model_matrix(df)
+            if d_model.empty:
+                st.info("Not enough numeric features or valid 0/1 target after preprocessing.")
             else:
-                d_model = build_model_matrix(df)
-                if d_model.empty:
-                    st.info("Not enough numeric features or valid 0/1 target after preprocessing.")
+                all_feats = [c for c in d_model.columns if c != "target"]
+
+                # 🔍 Use final feature set from t-Tests & Stepwise tab (if exists)
+                selected_feats = st.session_state.get("selected_features_for_modeling")
+
+                if selected_feats:
+                    selected_feats = [f for f in selected_feats if f in all_feats]
+                if selected_feats:
+                    used_feats = selected_feats
+                    st.success(
+                        f"Using {len(used_feats)} features selected by t-tests AND stepwise:\n\n"
+                        + ", ".join(used_feats)
+                    )
                 else:
-                    all_feats = [c for c in d_model.columns if c != "target"]
-        
-                    # 🔍 Use final feature set from t-Tests & Stepwise tab (if exists)
-                    selected_feats = st.session_state.get("selected_features_for_modeling")
-        
-                    if selected_feats:
-                        selected_feats = [f for f in selected_feats if f in all_feats]
-                    if selected_feats:
-                        used_feats = selected_feats
-                        st.success(
-                            f"Using {len(used_feats)} features selected by t-tests AND stepwise:\n\n"
-                            + ", ".join(used_feats)
-                        )
-                    else:
-                        used_feats = all_feats
-                        st.info(
-                            f"No final feature set found yet. "
-                            f"Using all {len(used_feats)} numeric features for modeling."
-                        )
-        
-                    X = d_model[used_feats]
-                    y = d_model["target"].astype(int)
-        
-                    X_train, X_test, y_train, y_test = train_test_split(
-                        X, y,
-                        test_size=test_size,
+                    used_feats = all_feats
+                    st.info(
+                        f"No final feature set found yet. "
+                        f"Using all {len(used_feats)} numeric features for modeling."
+                    )
+
+                X = d_model[used_feats]
+                y = d_model["target"].astype(int)
+
+                X_train, X_test, y_train, y_test = train_test_split(
+                    X, y,
+                    test_size=test_size,
+                    random_state=int(random_state),
+                    stratify=y
+                )
+                st.markdown(f"**Number of features used for modeling:** {len(used_feats)}")
+
+                # ⭐ NEW: apply class balancing option (TRAIN only)
+                balance_method = st.session_state.get("balance_method", "None")
+                X_train_model, y_train_model = X_train, y_train  # default: no balancing
+
+                if balance_method == "Undersampling":
+                    X_train_model, y_train_model = undersample_train(
+                        X_train, y_train, random_state=int(random_state)
+                    )
+                    counts_bal = y_train_model.value_counts().sort_index()
+                    msg = (
+                        f"✔ Undersampling applied on TRAIN set. "
+                        f"New distribution — 0: {counts_bal.get(0, 0):,}, "
+                        f"1: {counts_bal.get(1, 0):,}"
+                    )
+                    st.success(msg)
+
+                    # ✅ Save for Class Balancing tab
+                    st.session_state.balance_status_msg = msg
+                    st.session_state.balance_status_counts = dict(counts_bal)
+
+                elif balance_method == "SMOTE":
+                    sm = SMOTE(random_state=int(random_state))
+                    X_train_model, y_train_model = sm.fit_resample(X_train, y_train)
+                    counts_bal = pd.Series(y_train_model).value_counts().sort_index()
+                    msg = (
+                        f"✔ SMOTE applied on TRAIN set. "
+                        f"New distribution — 0: {counts_bal.get(0, 0):,}, "
+                        f"1: {counts_bal.get(1, 0):,}"
+                    )
+                    st.success(msg)
+
+                    # ✅ Save for Class Balancing tab
+                    st.session_state.balance_status_msg = msg
+                    st.session_state.balance_status_counts = dict(counts_bal)
+                else:
+                    msg = "No class balancing applied (using original train split)."
+                    st.info(msg)
+
+                    st.session_state.balance_status_msg = msg
+                    st.session_state.balance_status_counts = None
+
+                # ----------------- A. Baseline Logit -----------------
+                st.markdown("### A. Baseline Logistic Regression")
+                C_logit = st.slider(
+                    "Regularization strength C (Logit)",
+                    min_value=0.01,
+                    max_value=10.0,
+                    value=1.0,
+                    step=0.01,
+                    key="baseline_logit_C"
+                )
+                balance_logit = st.checkbox(
+                    "Use class_weight='balanced' for Logit",
+                    value=True,
+                    key="baseline_logit_balanced"
+                )
+                if st.button("Run baseline Logistic Regression", key="btn_baseline_logit"):
+                    logit_pipe = Pipeline([
+                        ("scaler", StandardScaler()),
+                        ("logit", LogisticRegression(
+                            C=C_logit,
+                            class_weight=("balanced" if balance_logit else None),
+                            max_iter=1000,
+                            solver="liblinear",
+                        )),
+                    ])
+                    # ⭐ use X_train_model / y_train_model
+                    logit_pipe.fit(X_train_model, y_train_model)
+
+                    probs_logit = logit_pipe.predict_proba(X_test)[:, 1]
+                    preds_logit = (probs_logit >= 0.5).astype(int)
+                    auc_logit = roc_auc_score(y_test, probs_logit)
+                    acc_logit = accuracy_score(y_test, preds_logit)
+                    f1_logit = f1_score(y_test, preds_logit)
+                    st.write(
+                        f"**Logit — Test AUC:** {auc_logit:.4f} · "
+                        f"**Accuracy:** {acc_logit:.4f} · "
+                        f"**F1-score (thr=0.5):** {f1_logit:.4f}"
+                    )
+
+                    # Confusion matrix — Logistic Regression
+                    cm_logit = confusion_matrix(y_test, preds_logit)
+                    cm_logit_df = pd.DataFrame(
+                        cm_logit,
+                        index=["True 0 (good)", "True 1 (bad)"],
+                        columns=["Pred 0 (good)", "Pred 1 (bad)"],
+                    )
+                    st.markdown("**Confusion matrix — Logistic Regression (test set)**")
+                    st.dataframe(cm_logit_df, use_container_width=True)
+
+                st.divider()
+
+                # ----------------- B. Decision Tree -----------------
+                st.markdown("### B. Decision Tree (rule-based model)")
+                max_depth_tree = st.slider(
+                    "Max depth (Decision Tree)",
+                    min_value=2,
+                    max_value=15,
+                    value=5,
+                    key="tree_max_depth_main"
+                )
+                min_leaf_tree = st.slider(
+                    "Minimum samples per leaf (Decision Tree)",
+                    min_value=10,
+                    max_value=200,
+                    value=50,
+                    step=10,
+                    key="tree_min_leaf_main"
+                )
+                if st.button("Run Decision Tree model", key="btn_tree_alone"):
+                    tree_clf = DecisionTreeClassifier(
+                        max_depth=max_depth_tree,
+                        min_samples_leaf=min_leaf_tree,
                         random_state=int(random_state),
-                        stratify=y
                     )
-                    st.markdown(f"**Number of features used for modeling:** {len(used_feats)}")
- 
-        
-                    # ⭐ NEW: apply class balancing option (TRAIN only)
-                    balance_method = st.session_state.get("balance_method", "None")
-                    X_train_model, y_train_model = X_train, y_train  # default: no balancing
-        
-                    if balance_method == "Undersampling":
-                        X_train_model, y_train_model = undersample_train(
-                            X_train, y_train, random_state=int(random_state)
-                        )
-                        counts_bal = y_train_model.value_counts().sort_index()
-                        msg = (
-                            f"✔ Undersampling applied on TRAIN set. "
-                            f"New distribution — 0: {counts_bal.get(0,0):,}, "
-                            f"1: {counts_bal.get(1,0):,}"
-                        )
-                        st.success(msg)
-                    
-                        # ✅ ADD THIS (save for Class Balancing tab)
-                        st.session_state.balance_status_msg = msg
-                        st.session_state.balance_status_counts = dict(counts_bal)
-                        
-                    elif balance_method == "SMOTE":
-                        sm = SMOTE(random_state=int(random_state))
-                        X_train_model, y_train_model = sm.fit_resample(X_train, y_train)
-                        counts_bal = pd.Series(y_train_model).value_counts().sort_index()
-                        msg = (
-                            f"✔ SMOTE applied on TRAIN set. "
-                            f"New distribution — 0: {counts_bal.get(0,0):,}, "
-                            f"1: {counts_bal.get(1,0):,}"
-                        )
-                        st.success(msg)
-                    
-                        # ✅ ADD THIS (save for Class Balancing tab)
-                        st.session_state.balance_status_msg = msg
-                        st.session_state.balance_status_counts = dict(counts_bal)
+                    # ⭐ fit on balanced train
+                    tree_clf.fit(X_train_model, y_train_model)
+
+                    probs_tree = tree_clf.predict_proba(X_test)[:, 1]
+                    preds_tree = (probs_tree >= 0.5).astype(int)
+                    auc_tree = roc_auc_score(y_test, probs_tree)
+                    acc_tree = accuracy_score(y_test, preds_tree)
+                    f1_tree = f1_score(y_test, preds_tree)
+                    st.write(
+                        f"**Decision Tree — Test AUC:** {auc_tree:.4f} · "
+                        f"**Accuracy:** {acc_tree:.4f} · "
+                        f"**F1-score (thr=0.5):** {f1_tree:.4f}"
+                    )
+
+                    # Confusion matrix — Decision Tree
+                    cm_tree = confusion_matrix(y_test, preds_tree)
+                    cm_tree_df = pd.DataFrame(
+                        cm_tree,
+                        index=["True 0 (good)", "True 1 (bad)"],
+                        columns=["Pred 0 (good)", "Pred 1 (bad)"],
+                    )
+                    st.markdown("**Confusion matrix — Decision Tree (test set)**")
+                    st.dataframe(cm_tree_df, use_container_width=True)
+
+                st.divider()
+
+                # ----------------- C. Hybrid Model -----------------
+                st.markdown("### C. Hybrid Model — Tree-selected Logistic Regression")
+                st.caption(
+                    "Step 1: Use a Decision Tree to find the most important features. "
+                    "Step 2: Train a Logistic Regression only on those features."
+                )
+                max_allowed_feats = min(20, X.shape[1])
+                min_allowed_feats = min(3, max_allowed_feats)
+
+                # ⚠️ Guard: when min == max, don't show a slider (it would crash)
+                if max_allowed_feats <= min_allowed_feats:
+                    max_feats_tree = max_allowed_feats
+                    st.caption(
+                        f"Only {max_allowed_feats} numeric features available; "
+                        f"using all of them for the hybrid model."
+                    )
+                else:
+                    max_feats_tree = st.slider(
+                        "Maximum number of features selected from the tree",
+                        min_value=min_allowed_feats,
+                        max_value=max_allowed_feats,
+                        value=min_allowed_feats,
+                        key="tree_hybrid_max_feats"
+                    )
+
+                if st.button("Run Hybrid Model (Tree → Logit)", key="btn_tree_logit_hybrid"):
+                    tree_clf2 = DecisionTreeClassifier(
+                        max_depth=5,
+                        min_samples_leaf=50,
+                        random_state=int(random_state),
+                    )
+                    # ⭐ fit on balanced train
+                    tree_clf2.fit(X_train_model, y_train_model)
+
+                    feats_tree = tree_select_features(
+                        X_train_model, y_train_model,
+                        max_features=max_feats_tree,
+                        random_state=int(random_state),
+                    )
+                    if not feats_tree:
+                        st.warning("The decision tree did not select any informative features.")
                     else:
-                        msg = "No class balancing applied (using original train split)."
-                        st.info(msg)
-                    
-                        st.session_state.balance_status_msg = msg
-                        st.session_state.balance_status_counts = None
-        
-                    # ----------------- A. Baseline Logit -----------------
-                    st.markdown("### A. Baseline Logistic Regression")
-                    C_logit = st.slider(
-                        "Regularization strength C (Logit)",
-                        min_value=0.01,
-                        max_value=10.0,
-                        value=1.0,
-                        step=0.01,
-                        key="baseline_logit_C"
-                    )
-                    balance_logit = st.checkbox(
-                        "Use class_weight='balanced' for Logit",
-                        value=True,
-                        key="baseline_logit_balanced"
-                    )
-                    if st.button("Run baseline Logistic Regression", key="btn_baseline_logit"):
-                        logit_pipe = Pipeline([
+                        st.write(
+                            f"**Features selected by the Decision Tree** "
+                            f"({len(feats_tree)} features): " + ", ".join(feats_tree)
+                        )
+                        hybrid_pipe = Pipeline([
                             ("scaler", StandardScaler()),
                             ("logit", LogisticRegression(
-                                C=C_logit,
-                                class_weight=("balanced" if balance_logit else None),
+                                C=1.0,
+                                class_weight="balanced",
                                 max_iter=1000,
                                 solver="liblinear",
                             )),
                         ])
-                        # ⭐ CHANGED: use X_train_model / y_train_model
-                        logit_pipe.fit(X_train_model, y_train_model)
-        
-                        probs_logit = logit_pipe.predict_proba(X_test)[:, 1]
-                        preds_logit = (probs_logit >= 0.5).astype(int)
-                        auc_logit = roc_auc_score(y_test, probs_logit)
-                        acc_logit = accuracy_score(y_test, preds_logit)
-                        f1_logit = f1_score(y_test, preds_logit)
+                        # ⭐ use balanced train subset
+                        hybrid_pipe.fit(X_train_model[feats_tree], y_train_model)
+
+                        probs_hybrid = hybrid_pipe.predict_proba(X_test[feats_tree])[:, 1]
+                        preds_hybrid = (probs_hybrid >= 0.5).astype(int)
+                        auc_hybrid = roc_auc_score(y_test, probs_hybrid)
+                        acc_hybrid = accuracy_score(y_test, preds_hybrid)
+                        f1_hybrid = f1_score(y_test, preds_hybrid)
+
+                        comp_rows = [
+                            {"Model": "Baseline Logit (all features)", "AUC": None, "Accuracy": None, "F1": None},
+                            {"Model": "Decision Tree", "AUC": None, "Accuracy": None, "F1": None},
+                            {"Model": "Hybrid (Tree-selected Logit)", "AUC": auc_hybrid, "Accuracy": acc_hybrid, "F1": f1_hybrid},
+                        ]
+                        comp_df = pd.DataFrame(comp_rows)
                         st.write(
-                            f"**Logit — Test AUC:** {auc_logit:.4f} · "
-                            f"**Accuracy:** {acc_logit:.4f} · "
-                            f"**F1-score (thr=0.5):** {f1_logit:.4f}"
+                            f"**Hybrid — Test AUC:** {auc_hybrid:.4f} · "
+                            f"**Accuracy:** {acc_hybrid:.4f} · "
+                            f"**F1-score (thr=0.5):** {f1_hybrid:.4f}"
                         )
-        
-                        # Confusion matrix — Logistic Regression
-                        cm_logit = confusion_matrix(y_test, preds_logit)
-                        cm_logit_df = pd.DataFrame(
-                            cm_logit,
+
+                        # Confusion matrix — Hybrid Model
+                        cm_hybrid = confusion_matrix(y_test, preds_hybrid)
+                        cm_hybrid_df = pd.DataFrame(
+                            cm_hybrid,
                             index=["True 0 (good)", "True 1 (bad)"],
                             columns=["Pred 0 (good)", "Pred 1 (bad)"],
                         )
-                        st.markdown("**Confusion matrix — Logistic Regression (test set)**")
-                        st.dataframe(cm_logit_df, use_container_width=True)
-        
+                        st.markdown("**Confusion matrix — Hybrid Model (test set)**")
+                        st.dataframe(cm_hybrid_df, use_container_width=True)
+
+                        st.subheader("Hybrid vs other models (AUC / Accuracy / F1)")
+                        st.dataframe(
+                            comp_df.style.format(
+                                {"AUC": "{:.4f}", "Accuracy": "{:.4f}", "F1": "{:.4f}"}
+                            ),
+                            use_container_width=True
+                        )
+
+                    # 🔥 Final comparative analysis block (professor requirement)
+                    from sklearn.metrics import precision_score, recall_score
+
                     st.divider()
-        
-                    # ----------------- B. Decision Tree -----------------
-                    st.markdown("### B. Decision Tree (rule-based model)")
-                    max_depth_tree = st.slider(
-                        "Max depth (Decision Tree)",
-                        min_value=2,
-                        max_value=15,
-                        value=5,
-                        key="tree_max_depth_main"
-                    )
-                    min_leaf_tree = st.slider(
-                        "Minimum samples per leaf (Decision Tree)",
-                        min_value=10,
-                        max_value=200,
-                        value=50,
-                        step=10,
-                        key="tree_min_leaf_main"
-                    )
-                    if st.button("Run Decision Tree model", key="btn_tree_alone"):
-                        tree_clf = DecisionTreeClassifier(
-                            max_depth=max_depth_tree,
-                            min_samples_leaf=min_leaf_tree,
-                            random_state=int(random_state),
-                        )
-                        # ⭐ CHANGED: use balanced train
-                        tree_clf.fit(X_train_model, y_train_model)
-        
-                        probs_tree = tree_clf.predict_proba(X_test)[:, 1]
-                        preds_tree = (probs_tree >= 0.5).astype(int)
-                        auc_tree = roc_auc_score(y_test, probs_tree)
-                        acc_tree = accuracy_score(y_test, preds_tree)
-                        f1_tree = f1_score(y_test, preds_tree)
-                        st.write(
-                            f"**Decision Tree — Test AUC:** {auc_tree:.4f} · "
-                            f"**Accuracy:** {acc_tree:.4f} · "
-                            f"**F1-score (thr=0.5):** {f1_tree:.4f}"
-                        )
-        
-                        # Confusion matrix — Decision Tree
-                        cm_tree = confusion_matrix(y_test, preds_tree)
-                        cm_tree_df = pd.DataFrame(
-                            cm_tree,
-                            index=["True 0 (good)", "True 1 (bad)"],
-                            columns=["Pred 0 (good)", "Pred 1 (bad)"],
-                        )
-                        st.markdown("**Confusion matrix — Decision Tree (test set)**")
-                        st.dataframe(cm_tree_df, use_container_width=True)
-        
-                    st.divider()
-        
-                    # ----------------- C. Hybrid Model -----------------
-                    st.markdown("### C. Hybrid Model — Tree-selected Logistic Regression")
-                    st.caption(
-                        "Step 1: Use a Decision Tree to find the most important features. "
-                        "Step 2: Train a Logistic Regression only on those features."
-                    )
-                    max_allowed_feats = min(20, X.shape[1])
-                    min_allowed_feats = min(3, max_allowed_feats)
-                    
-                    # ⚠️ Guard: when min == max, don't show a slider (it would crash)
-                    if max_allowed_feats <= min_allowed_feats:
-                        max_feats_tree = max_allowed_feats
-                        st.caption(
-                            f"Only {max_allowed_feats} numeric features available; "
-                            f"using all of them for the hybrid model."
-                        )
+                    st.subheader("📌 Final Comparative Analysis (All Models)")
+
+                    comp_rows_all = []
+
+                    # Baseline Logit
+                    if "preds_logit" in locals():
+                        cm = confusion_matrix(y_test, preds_logit)
+                        comp_rows_all.append({
+                            "Model": "Baseline Logistic Regression",
+                            "AUC": auc_logit,
+                            "Accuracy": acc_logit,
+                            "Precision": precision_score(y_test, preds_logit, zero_division=0),
+                            "Recall": recall_score(y_test, preds_logit, zero_division=0),
+                            "Confusion Matrix": cm
+                        })
+
+                    # Stepwise Logit (only if you later add that model in this tab)
+                    if "preds_sw" in locals():
+                        cm = confusion_matrix(y_test_sw, preds_sw)
+                        comp_rows_all.append({
+                            "Model": "Stepwise Logistic Regression",
+                            "AUC": auc_sw,
+                            "Accuracy": acc_sw,
+                            "Precision": precision_score(y_test_sw, preds_sw, zero_division=0),
+                            "Recall": recall_score(y_test_sw, preds_sw, zero_division=0),
+                            "Confusion Matrix": cm
+                        })
+
+                    # Decision Tree
+                    if "preds_tree" in locals():
+                        cm = confusion_matrix(y_test, preds_tree)
+                        comp_rows_all.append({
+                            "Model": "Decision Tree",
+                            "AUC": auc_tree,
+                            "Accuracy": acc_tree,
+                            "Precision": precision_score(y_test, preds_tree, zero_division=0),
+                            "Recall": recall_score(y_test, preds_tree, zero_division=0),
+                            "Confusion Matrix": cm
+                        })
+
+                    # Hybrid
+                    if "preds_hybrid" in locals():
+                        cm = confusion_matrix(y_test, preds_hybrid)
+                        comp_rows_all.append({
+                            "Model": "Hybrid (Tree → Logit)",
+                            "AUC": auc_hybrid,
+                            "Accuracy": acc_hybrid,
+                            "Precision": precision_score(y_test, preds_hybrid, zero_division=0),
+                            "Recall": recall_score(y_test, preds_hybrid, zero_division=0),
+                            "Confusion Matrix": cm
+                        })
+
+                    if comp_rows_all:
+                        comp_df_all = pd.DataFrame(comp_rows_all)
+                        st.dataframe(comp_df_all, use_container_width=True)
+                        st.success("Comparative analysis completed successfully.")
                     else:
-                        max_feats_tree = st.slider(
-                            "Maximum number of features selected from the tree",
-                            min_value=min_allowed_feats,
-                            max_value=max_allowed_feats,
-                            value=min_allowed_feats,
-                            key="tree_hybrid_max_feats"
-                        )
+                        st.info("Run at least two models to compare them.")
 
-                    
-                    if st.button("Run Hybrid Model (Tree → Logit)", key="btn_tree_logit_hybrid"):
-                        tree_clf2 = DecisionTreeClassifier(
-                            max_depth=5,
-                            min_samples_leaf=50,
-                            random_state=int(random_state),
-                        )
-                        # ⭐ CHANGED: fit on balanced train
-                        tree_clf2.fit(X_train_model, y_train_model)
-        
-                        feats_tree = tree_select_features(
-                            X_train_model, y_train_model,
-                            max_features=max_feats_tree,
-                            random_state=int(random_state),
-                        )
-                        if not feats_tree:
-                            st.warning("The decision tree did not select any informative features.")
-                        else:
-                            st.write(
-                                f"**Features selected by the Decision Tree** "
-                                f"({len(feats_tree)} features): " + ", ".join(feats_tree)
-                            )
-                            hybrid_pipe = Pipeline([
-                                ("scaler", StandardScaler()),
-                                ("logit", LogisticRegression(
-                                    C=1.0,
-                                    class_weight="balanced",
-                                    max_iter=1000,
-                                    solver="liblinear",
-                                )),
-                            ])
-                            # ⭐ CHANGED: use balanced train subset
-                            hybrid_pipe.fit(X_train_model[feats_tree], y_train_model)
-        
-                            probs_hybrid = hybrid_pipe.predict_proba(X_test[feats_tree])[:, 1]
-                            preds_hybrid = (probs_hybrid >= 0.5).astype(int)
-                            auc_hybrid = roc_auc_score(y_test, probs_hybrid)
-                            acc_hybrid = accuracy_score(y_test, preds_hybrid)
-                            f1_hybrid = f1_score(y_test, preds_hybrid)
-        
-                            comp_rows = [
-                                {"Model": "Baseline Logit (all features)", "AUC": None, "Accuracy": None, "F1": None},
-                                {"Model": "Decision Tree", "AUC": None, "Accuracy": None, "F1": None},
-                                {"Model": "Hybrid (Tree-selected Logit)", "AUC": auc_hybrid, "Accuracy": acc_hybrid, "F1": f1_hybrid},
-                            ]
-                            comp_df = pd.DataFrame(comp_rows)
-                            st.write(
-                                f"**Hybrid — Test AUC:** {auc_hybrid:.4f} · "
-                                f"**Accuracy:** {acc_hybrid:.4f} · "
-                                f"**F1-score (thr=0.5):** {f1_hybrid:.4f}"
-                            )
-        
-                            # Confusion matrix — Hybrid Model
-                            cm_hybrid = confusion_matrix(y_test, preds_hybrid)
-                            cm_hybrid_df = pd.DataFrame(
-                                cm_hybrid,
-                                index=["True 0 (good)", "True 1 (bad)"],
-                                columns=["Pred 0 (good)", "Pred 1 (bad)"],
-                            )
-                            st.markdown("**Confusion matrix — Hybrid Model (test set)**")
-                            st.dataframe(cm_hybrid_df, use_container_width=True)
-        
-                            st.subheader("Hybrid vs other models (AUC / Accuracy / F1)")
-                            st.dataframe(
-                                comp_df.style.format(
-                                    {"AUC": "{:.4f}", "Accuracy": "{:.4f}", "F1": "{:.4f}"}
-                                ),
-                                use_container_width=True
-                            )
-
-
-                        # 🔥 Final comparative analysis block (professor requirement)
-                        from sklearn.metrics import confusion_matrix, precision_score, recall_score
-                        
-                        st.divider()
-                        st.subheader("📌 Final Comparative Analysis (All Models)")
-                        
-                        comp_rows = []
-                        
-                        # Baseline Logit
-                        if "preds_logit" in locals():
-                            cm = confusion_matrix(y_test, preds_logit)
-                            comp_rows.append({
-                                "Model": "Baseline Logistic Regression",
-                                "AUC": auc_logit,
-                                "Accuracy": acc_logit,
-                                "Precision": precision_score(y_test, preds_logit, zero_division=0),
-                                "Recall": recall_score(y_test, preds_logit, zero_division=0),
-                                "Confusion Matrix": cm
-                            })
-                        
-                        # Stepwise Logit
-                        if "preds_sw" in locals():
-                            cm = confusion_matrix(y_test_sw, preds_sw)
-                            comp_rows.append({
-                                "Model": "Stepwise Logistic Regression",
-                                "AUC": auc_sw,
-                                "Accuracy": acc_sw,
-                                "Precision": precision_score(y_test_sw, preds_sw, zero_division=0),
-                                "Recall": recall_score(y_test_sw, preds_sw, zero_division=0),
-                                "Confusion Matrix": cm
-                            })
-                        
-                        # Decision Tree
-                        if "preds_tree" in locals():
-                            cm = confusion_matrix(y_test, preds_tree)
-                            comp_rows.append({
-                                "Model": "Decision Tree",
-                                "AUC": auc_tree,
-                                "Accuracy": acc_tree,
-                                "Precision": precision_score(y_test, preds_tree, zero_division=0),
-                                "Recall": recall_score(y_test, preds_tree, zero_division=0),
-                                "Confusion Matrix": cm
-                            })
-                        
-                        if comp_rows:
-                            comp_df_all = pd.DataFrame(comp_rows)
-                            st.dataframe(comp_df_all, use_container_width=True)
-                            st.success("Comparative analysis completed successfully.")
-                        else:
-                            st.info("Run at least two models to compare them.")
-                                            
-                    
+        st.markdown('</div>', unsafe_allow_html=True)
 
     # ========== Logit Interpretation ==========
     with tab_logit:
         st.markdown('<div class="card">', unsafe_allow_html=True)
         st.subheader("Logistic Regression — Interpret the model")
-        st.caption("Target legend — 0: Charged Off, 1: Fully Paid")
+        st.caption("Target legend — 0: good, 1: bad")
 
         if "target" not in df.columns:
             st.info("No 'target' column found.")
@@ -1368,9 +1375,11 @@ and any binary classification workflow ⚡
                         max_value=max_k,
                         value=min_k
                     )
-                    feats_override = st.multiselect("(Optional) Manually choose features",
-                                                    options=numeric_pool,
-                                                    default=default_pool)
+                    feats_override = st.multiselect(
+                        "(Optional) Manually choose features",
+                        options=numeric_pool,
+                        default=default_pool
+                    )
 
                 try:
                     base_feats = feats_override if feats_override else default_pool
@@ -1379,33 +1388,43 @@ and any binary classification workflow ⚡
                     y0 = pd.to_numeric(dtrain0["target"], errors="coerce").astype(int).values
                     base_pipe = Pipeline([
                         ("scaler", StandardScaler()),
-                        ("logit", LogisticRegression(C=C, class_weight=("balanced" if balance else None),
-                                                     solver="liblinear", max_iter=400))
+                        ("logit", LogisticRegression(
+                            C=C,
+                            class_weight=("balanced" if balance else None),
+                            solver="liblinear",
+                            max_iter=400
+                        ))
                     ])
                     base_pipe.fit(X0, y0)
                     init_coefs = base_pipe.named_steps["logit"].coef_.ravel()
                     order_idx = np.argsort(-np.abs(init_coefs))
                     feats = [base_feats[i] for i in order_idx[:top_k]]
                     dtrain = df[["target"] + feats].dropna().copy()
-                    X = dtrain[feats].values
-                    y = pd.to_numeric(dtrain["target"], errors="coerce").astype(int).values
-                    pipe = Pipeline([
+                    X_int = dtrain[feats].values
+                    y_int = pd.to_numeric(dtrain["target"], errors="coerce").astype(int).values
+                    pipe_int = Pipeline([
                         ("scaler", StandardScaler()),
-                        ("logit", LogisticRegression(C=C, class_weight=("balanced" if balance else None),
-                                                     solver="liblinear", max_iter=400))
+                        ("logit", LogisticRegression(
+                            C=C,
+                            class_weight=("balanced" if balance else None),
+                            solver="liblinear",
+                            max_iter=400
+                        ))
                     ])
-                    pipe.fit(X, y)
-                    probs = pipe.predict_proba(X)[:, 1]
-                    clf = pipe.named_steps["logit"]
+                    pipe_int.fit(X_int, y_int)
+                    probs_int = pipe_int.predict_proba(X_int)[:, 1]
+                    clf = pipe_int.named_steps["logit"]
                 except Exception as e:
                     st.info("Scikit-learn / statsmodels are required for this tab.")
                     st.exception(e)
                     st.markdown('</div>', unsafe_allow_html=True)
                     st.stop()
 
-                visual = st.radio("Visual type",
-                                  ["Odds-ratio forest", "Probability vs one feature", "Interaction heatmap"],
-                                  horizontal=True)
+                visual = st.radio(
+                    "Visual type",
+                    ["Odds-ratio forest", "Probability vs one feature", "Interaction heatmap"],
+                    horizontal=True
+                )
 
                 if visual == "Odds-ratio forest":
                     coefs = clf.coef_.ravel()
@@ -1414,7 +1433,7 @@ and any binary classification workflow ⚡
                     try:
                         Z = StandardScaler().fit_transform(dtrain[feats].values)
                         Z = sm.add_constant(Z)
-                        sm_mod = sm.Logit(y, Z).fit(disp=False)
+                        sm_mod = sm.Logit(y_int, Z).fit(disp=False)
                         params = sm_mod.params[1:]
                         cov = sm_mod.cov_params().values[1:, 1:]
                         se = np.sqrt(np.diag(cov))
@@ -1450,9 +1469,9 @@ and any binary classification workflow ⚡
                     feasible = [f for f in feats if f in EDA_VARS] or feats
                     one_x = feasible[0]
                     plot_df = dtrain[[one_x]].copy()
-                    plot_df["p1"] = probs
-                    bins = np.linspace(plot_df[one_x].min(), plot_df[one_x].max(), 31)
-                    plot_df["bin"] = pd.cut(plot_df[one_x], bins=bins, include_lowest=True)
+                    plot_df["p1"] = probs_int
+                    bins_p = np.linspace(plot_df[one_x].min(), plot_df[one_x].max(), 31)
+                    plot_df["bin"] = pd.cut(plot_df[one_x], bins=bins_p, include_lowest=True)
                     line_df = plot_df.groupby("bin", observed=False).agg(
                         x=(one_x, "mean"), p=("p1", "mean"), n=("p1", "size")
                     ).dropna()
@@ -1470,13 +1489,13 @@ and any binary classification workflow ⚡
                     if len(feats) < 2:
                         st.info("Need at least two features for an interaction.")
                     else:
-                        f1_, f2_ = feats[0], feats[1]
-                        tmp = dtrain[[f1_, f2_]].copy()
-                        tmp["p1"] = probs
-                        bx = pd.cut(tmp[f1_], bins=20, include_lowest=True)
-                        by = pd.cut(tmp[f2_], bins=20, include_lowest=True)
+                        f1_i, f2_i = feats[0], feats[1]
+                        tmp = dtrain[[f1_i, f2_i]].copy()
+                        tmp["p1"] = probs_int
+                        bx = pd.cut(tmp[f1_i], bins=20, include_lowest=True)
+                        by = pd.cut(tmp[f2_i], bins=20, include_lowest=True)
                         grid = tmp.groupby([bx, by], observed=False)["p1"].mean().reset_index()
-                        grid.columns = [f1_, f2_, "p"]
+                        grid.columns = [f1_i, f2_i, "p"]
 
                         def mid(iv):
                             try:
@@ -1484,12 +1503,12 @@ and any binary classification workflow ⚡
                             except Exception:
                                 return np.nan
 
-                        grid["x"] = grid[f1_].apply(mid)
-                        grid["y"] = grid[f2_].apply(mid)
+                        grid["x"] = grid[f1_i].apply(mid)
+                        grid["y"] = grid[f2_i].apply(mid)
                         grid = grid.dropna()
                         heat = alt.Chart(grid).mark_rect().encode(
-                            x=alt.X("x:Q", title=f1_),
-                            y=alt.Y("y:Q", title=f2_),
+                            x=alt.X("x:Q", title=f1_i),
+                            y=alt.Y("y:Q", title=f2_i),
                             color=alt.Color("p:Q", title="Mean P(target=1)"),
                             tooltip=[alt.Tooltip("x:Q", format=".2f"),
                                      alt.Tooltip("y:Q", format=".2f"),
