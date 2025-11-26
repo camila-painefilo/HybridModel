@@ -4,7 +4,7 @@ numpy==1.26.4
 scipy==1.13.1
 altair==5.4.1
 scikit-learn==1.5.2
-statsmodels==0.14.2 
+statsmodels==0.14.2
 pyLDAvis==3.4.1
 networkx==3.4.1
 matplotlib==3.9.2
@@ -13,7 +13,7 @@ squarify==0.4.4
 gdown==5.2.0
 torch==2.2.2
 torchvision==0.17.2
-gensim
+gensim==4.3.2
 gspread==6.1.2
 oauth2client==4.1.3
 google-auth==2.35.0
@@ -21,7 +21,8 @@ google-auth-oauthlib==1.2.1
 transformers==4.45.2
 tokenizers==0.20.3
 seaborn==0.13.2
-imbalanced-learn
+imbalanced-learn==0.12.4
+
 
 
 
