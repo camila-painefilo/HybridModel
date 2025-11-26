@@ -444,11 +444,12 @@ and any binary classification workflow.
         return selected
 
     # -------------------- Tabs --------------------
-    tab_data, tab_dist, tab_corr, tab_ttest, tab_pred, tab_logit = st.tabs([
+    tab_data, tab_dist, tab_corr, tab_ttest, tab_balance, tab_pred, tab_logit = st.tabs([
         "🧭 Data Exploration",
         "📈 Data Visualization",
         "🧮 Correlation Heatmap",
         "📏 t-Tests",
+        "⚖️ Class Balancing",
         "🔮 Prediction Models (Hybrid)",
         "🧠 Model Interpretation"
     ])
@@ -771,6 +772,38 @@ and any binary classification workflow.
                         st.caption("Welch’s t-test with 95% CI and effect sizes.")
 
         st.markdown('</div>', unsafe_allow_html=True)
+    # ========== Class Balancing ==========
+    with tab_balance:
+        st.markdown('<div class="card">', unsafe_allow_html=True)
+        st.subheader("⚖️ Class Balancing for Modeling")
+
+        if "target" not in df.columns:
+            st.info("No 'target' column found.")
+        else:
+            counts = pd.to_numeric(df["target"], errors="coerce").value_counts().to_dict()
+            st.write("**Current target distribution (0 = good, 1 = bad):**")
+            st.write(counts)
+
+            # opción guardada en sesión
+            default_method = st.session_state.get("balance_method", "None")
+
+            method = st.radio(
+                "Select balancing method (applied only to TRAIN set before modeling)",
+                ["None", "Undersampling", "SMOTE"],
+                index=["None", "Undersampling", "SMOTE"].index(default_method),
+            )
+
+            st.session_state.balance_method = method
+
+            if method == "None":
+                st.info("No re-sampling will be applied. Models will use the original train split.")
+            elif method == "Undersampling":
+                st.warning("Random undersampling will downsample the majority class in the TRAIN set.")
+            else:
+                st.warning("SMOTE will generate synthetic observations for the minority class in the TRAIN set.")
+
+        st.markdown('</div>', unsafe_allow_html=True)
+
 
     # ========== Prediction Models ==========
     with tab_pred:
