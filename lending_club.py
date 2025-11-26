@@ -1340,19 +1340,17 @@ and any binary classification workflow ⚡
                         })
                     if comp_rows_all:
                         comp_df_all = pd.DataFrame(comp_rows_all)
-                    # 🔧 Convert confusion matrices to readable text so Streamlit doesn't crash
+                        # 🔧 Convert confusion matrices to readable text so Streamlit doesn't crash
                         if "Confusion Matrix" in comp_df_all.columns:
                             comp_df_all["Confusion Matrix"] = comp_df_all["Confusion Matrix"].apply(
                                 lambda cm: "\n".join(
                                     [" ".join(map(str, row)) for row in cm]
                                 ) if isinstance(cm, np.ndarray) else cm
                             )
-                         st.dataframe(comp_df_all, use_container_width=True)
-                         st.success("Comparative analysis completed successfully."
+                        st.dataframe(comp_df_all, use_container_width=True)
+                        st.success("Comparative analysis completed successfully.")
                     else:
-                            st.info("Run at least two models to compare them.")
-
-
+                        st.info("Run at least two models to compare them.")
 
         st.markdown('</div>', unsafe_allow_html=True)
 
