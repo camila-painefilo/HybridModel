@@ -1155,13 +1155,24 @@ and any binary classification workflow.
                     )
                     max_allowed_feats = min(20, X.shape[1])
                     min_allowed_feats = min(3, max_allowed_feats)
-                    max_feats_tree = st.slider(
-                        "Maximum number of features selected from the tree",
-                        min_value=min_allowed_feats,
-                        max_value=max_allowed_feats,
-                        value=min_allowed_feats,
-                        key="tree_hybrid_max_feats"
-                    )
+                    
+                    # ⚠️ Guard: when min == max, don't show a slider (it would crash)
+                    if max_allowed_feats <= min_allowed_feats:
+                        max_feats_tree = max_allowed_feats
+                        st.caption(
+                            f"Only {max_allowed_feats} numeric features available; "
+                            f"using all of them for the hybrid model."
+                        )
+                    else:
+                        max_feats_tree = st.slider(
+                            "Maximum number of features selected from the tree",
+                            min_value=min_allowed_feats,
+                            max_value=max_allowed_feats,
+                            value=min_allowed_feats,
+                            key="tree_hybrid_max_feats"
+                        )
+
+                    
                     if st.button("Run Hybrid Model (Tree → Logit)", key="btn_tree_logit_hybrid"):
                         tree_clf2 = DecisionTreeClassifier(
                             max_depth=5,
