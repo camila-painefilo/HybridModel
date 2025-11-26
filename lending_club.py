@@ -65,34 +65,30 @@ def main():
 
     st.write("")
 
-# -------------------- 💠 WELCOME PAGE --------------------
-if not st.session_state.welcome_done:
+    # -------------------- 💠 WELCOME PAGE --------------------
+    if not st.session_state.welcome_done:
 
-    # Creamos columnas 1 (imagen) y 3 (texto + botón)
-    col1, col2, col3 = st.columns([1, 0.3, 2])
+        col1, col2, col3 = st.columns([1, 0.3, 2])
 
-    with col1:
-        st.image("welcome_image.png", width=220)
+        with col1:
+            st.image("welcome_image.png", width=220)
 
-    with col3:
-        st.markdown("## 💳 Welcome to the Hybrid Model Agent")
-        st.markdown(
-            """
+        with col3:
+            st.markdown("## 💳 Welcome to the Hybrid Model Agent")
+            st.markdown(
+                """
 A flexible and intelligent platform for tabular data exploration,  
 statistical testing, feature selection, and hybrid predictive modeling.  
 
 Designed for credit scoring, churn prediction, customer analytics,  
 and any binary classification workflow.
-            """
-        )
+                """
+            )
 
-        # Botón debajo del texto, alineado en esta columna
-        start = st.button("🚀 Start the Analysis")
-        if start:
-            st.session_state.welcome_done = True
-            st.rerun()
-
-    st.stop()
+            start = st.button("🚀 Start the Analysis")
+            if start:
+                st.session_state.welcome_done = True
+                st.rerun()
 
         st.stop()  # ⛔ prevents rest of dashboard from loading
 
