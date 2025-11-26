@@ -469,14 +469,13 @@ and any binary classification workflow ⚡
         return X_bal, y_bal
 
     # -------------------- Tabs --------------------
-    tab_data, tab_dist, tab_corr, tab_ttest, tab_balance, tab_pred, tab_logit = st.tabs([
+    tab_data, tab_dist, tab_corr, tab_ttest, tab_balance, tab_pred = st.tabs([
         "🧭 Data Exploration",
         "📈 Data Visualization",
         "🧮 Correlation Heatmap",
         "📏 t-Tests & Stepwise",
         "⚖️ Class Balancing",
-        "🔮 Prediction Models (Hybrid)",
-        "🧠 Model Interpretation"
+        "🔮 Prediction Models (Hybrid)"
     ])
 
     # ========== Data Exploration ==========
@@ -1347,176 +1346,6 @@ and any binary classification workflow ⚡
                     else:
                         st.info("Run at least two models to compare them.")
 
-        st.markdown('</div>', unsafe_allow_html=True)
-
-    # ========== Logit Interpretation ==========
-    with tab_logit:
-        st.markdown('<div class="card">', unsafe_allow_html=True)
-        st.subheader("Logistic Regression — Interpret the model")
-        st.caption("Target legend — 0: good, 1: bad")
-
-        if "target" not in df.columns:
-            st.info("No 'target' column found.")
-        else:
-            numeric_pool = [c for c in df.select_dtypes(include=[np.number]).columns if c != "target"]
-            if len(numeric_pool) == 0:
-                st.info("No numeric features available for logit.")
-            else:
-                default_pool = [c for c in ["int_rate", "dti", "revol_util", "loan_amnt", "annual_inc"]
-                                if c in numeric_pool] or numeric_pool[:8]
-                with st.expander("⚙️ Model settings", expanded=False):
-                    C = st.slider("Regularization strength (C)", 0.01, 10.0, 1.0, 0.01)
-                    balance = st.checkbox("Class weight = 'balanced'", value=True)
-                    max_k = min(12, len(default_pool))
-                    min_k = min(3, max_k)
-                    top_k = st.slider(
-                        "Auto-select top-k features (by |coef|)",
-                        min_value=min_k,
-                        max_value=max_k,
-                        value=min_k
-                    )
-                    feats_override = st.multiselect(
-                        "(Optional) Manually choose features",
-                        options=numeric_pool,
-                        default=default_pool
-                    )
-
-                try:
-                    base_feats = feats_override if feats_override else default_pool
-                    dtrain0 = df[["target"] + base_feats].dropna().copy()
-                    X0 = dtrain0[base_feats].values
-                    y0 = pd.to_numeric(dtrain0["target"], errors="coerce").astype(int).values
-                    base_pipe = Pipeline([
-                        ("scaler", StandardScaler()),
-                        ("logit", LogisticRegression(
-                            C=C,
-                            class_weight=("balanced" if balance else None),
-                            solver="liblinear",
-                            max_iter=400
-                        ))
-                    ])
-                    base_pipe.fit(X0, y0)
-                    init_coefs = base_pipe.named_steps["logit"].coef_.ravel()
-                    order_idx = np.argsort(-np.abs(init_coefs))
-                    feats = [base_feats[i] for i in order_idx[:top_k]]
-                    dtrain = df[["target"] + feats].dropna().copy()
-                    X_int = dtrain[feats].values
-                    y_int = pd.to_numeric(dtrain["target"], errors="coerce").astype(int).values
-                    pipe_int = Pipeline([
-                        ("scaler", StandardScaler()),
-                        ("logit", LogisticRegression(
-                            C=C,
-                            class_weight=("balanced" if balance else None),
-                            solver="liblinear",
-                            max_iter=400
-                        ))
-                    ])
-                    pipe_int.fit(X_int, y_int)
-                    probs_int = pipe_int.predict_proba(X_int)[:, 1]
-                    clf = pipe_int.named_steps["logit"]
-                except Exception as e:
-                    st.info("Scikit-learn / statsmodels are required for this tab.")
-                    st.exception(e)
-                    st.markdown('</div>', unsafe_allow_html=True)
-                    st.stop()
-
-                visual = st.radio(
-                    "Visual type",
-                    ["Odds-ratio forest", "Probability vs one feature", "Interaction heatmap"],
-                    horizontal=True
-                )
-
-                if visual == "Odds-ratio forest":
-                    coefs = clf.coef_.ravel()
-                    odds = np.exp(coefs)
-                    ci_low = ci_high = None
-                    try:
-                        Z = StandardScaler().fit_transform(dtrain[feats].values)
-                        Z = sm.add_constant(Z)
-                        sm_mod = sm.Logit(y_int, Z).fit(disp=False)
-                        params = sm_mod.params[1:]
-                        cov = sm_mod.cov_params().values[1:, 1:]
-                        se = np.sqrt(np.diag(cov))
-                        ci_low = np.exp(params - 1.96 * se)
-                        ci_high = np.exp(params + 1.96 * se)
-                    except Exception:
-                        pass
-
-                    coef_df = pd.DataFrame({"feature": feats, "odds_ratio": odds}).sort_values("odds_ratio", ascending=False)
-                    if ci_low is not None:
-                        coef_df["ci_low"] = ci_low
-                        coef_df["ci_high"] = ci_high
-                    base_chart = alt.Chart(coef_df).encode(y=alt.Y("feature:N", sort="-x", title=""))
-                    bars = base_chart.mark_bar(size=10).encode(
-                        x=alt.X("odds_ratio:Q", title="Odds Ratio (exp(coef))"),
-                        tooltip=["feature", alt.Tooltip("odds_ratio:Q", format=".2f")]
-                    )
-                    if "ci_low" in coef_df.columns:
-                        rules = base_chart.mark_rule().encode(
-                            x="ci_low:Q", x2="ci_high:Q",
-                            tooltip=["feature",
-                                     alt.Tooltip("odds_ratio:Q", format=".2f"),
-                                     alt.Tooltip("ci_low:Q", format=".2f"),
-                                     alt.Tooltip("ci_high:Q", format=".2f")]
-                        )
-                        chart = bars + rules
-                    else:
-                        chart = bars
-                    st.markdown("**Feature effects (Odds Ratios)** — > 1 increases odds of target=1; < 1 decreases.")
-                    st.altair_chart(chart.properties(height=360), use_container_width=True)
-
-                elif visual == "Probability vs one feature":
-                    feasible = [f for f in feats if f in EDA_VARS] or feats
-                    one_x = feasible[0]
-                    plot_df = dtrain[[one_x]].copy()
-                    plot_df["p1"] = probs_int
-                    bins_p = np.linspace(plot_df[one_x].min(), plot_df[one_x].max(), 31)
-                    plot_df["bin"] = pd.cut(plot_df[one_x], bins=bins_p, include_lowest=True)
-                    line_df = plot_df.groupby("bin", observed=False).agg(
-                        x=(one_x, "mean"), p=("p1", "mean"), n=("p1", "size")
-                    ).dropna()
-                    line = alt.Chart(line_df).mark_line(point=True).encode(
-                        x=alt.X("x:Q", title=one_x),
-                        y=alt.Y("p:Q", title="Mean P(target=1)"),
-                        size=alt.Size("n:Q", legend=None, title="Bin size"),
-                        tooltip=[alt.Tooltip("x:Q", format=".2f"),
-                                 alt.Tooltip("p:Q", format=".3f"),
-                                 "n:Q"]
-                    ).properties(height=360)
-                    st.altair_chart(line, use_container_width=True)
-
-                else:  # interaction
-                    if len(feats) < 2:
-                        st.info("Need at least two features for an interaction.")
-                    else:
-                        f1_i, f2_i = feats[0], feats[1]
-                        tmp = dtrain[[f1_i, f2_i]].copy()
-                        tmp["p1"] = probs_int
-                        bx = pd.cut(tmp[f1_i], bins=20, include_lowest=True)
-                        by = pd.cut(tmp[f2_i], bins=20, include_lowest=True)
-                        grid = tmp.groupby([bx, by], observed=False)["p1"].mean().reset_index()
-                        grid.columns = [f1_i, f2_i, "p"]
-
-                        def mid(iv):
-                            try:
-                                return (iv.left + iv.right) / 2
-                            except Exception:
-                                return np.nan
-
-                        grid["x"] = grid[f1_i].apply(mid)
-                        grid["y"] = grid[f2_i].apply(mid)
-                        grid = grid.dropna()
-                        heat = alt.Chart(grid).mark_rect().encode(
-                            x=alt.X("x:Q", title=f1_i),
-                            y=alt.Y("y:Q", title=f2_i),
-                            color=alt.Color("p:Q", title="Mean P(target=1)"),
-                            tooltip=[alt.Tooltip("x:Q", format=".2f"),
-                                     alt.Tooltip("y:Q", format=".2f"),
-                                     alt.Tooltip("p:Q", format=".3f")]
-                        ).properties(height=420)
-                        st.altair_chart(heat, use_container_width=True)
-
-                st.caption("Exploratory interpretation only • Standardized features • No performance metrics shown.")
         st.markdown('</div>', unsafe_allow_html=True)
 
     # -------------------- Footer --------------------
