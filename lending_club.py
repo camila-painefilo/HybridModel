@@ -1348,8 +1348,8 @@ and any binary classification workflow ⚡
                                 ) if isinstance(cm, np.ndarray) else cm
                             )
                         st.dataframe(comp_df_all, use_container_width=True)
-                        st.success("Comparative analysis completed successfully.")
-                        else:
+                        st.success("Comparative analysis completed successfully."
+                    else:
                             st.info("Run at least two models to compare them.")
 
 
