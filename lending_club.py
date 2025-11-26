@@ -65,20 +65,17 @@ def main():
 
     st.write("")
 
-    # -------------------- 💠 WELCOME PAGE --------------------
-    if not st.session_state.welcome_done:
+   # -------------------- 💠 WELCOME PAGE --------------------
+if not st.session_state.welcome_done:
 
-        st.markdown(
-            """
-<div style='margin-top:40px;'>
+    welcome_html = """<div style='margin-top:40px;'>
   <div style='display:flex; align-items:center; gap:32px; flex-wrap:wrap;'>
 
     <!-- IMAGE -->
     <div>
       <img src="welcome_image.png"
            alt="Welcome illustration"
-           style="width:240px; border-radius:18px;
-                  box-shadow:0 8px 24px rgba(15,23,42,0.25);">
+           style="width:240px; border-radius:18px; box-shadow:0 8px 24px rgba(15,23,42,0.25);">
     </div>
 
     <!-- TEXT -->
@@ -95,17 +92,16 @@ def main():
     </div>
 
   </div>
-</div>
-            """,
-            unsafe_allow_html=True
-        )
+</div>"""
 
-        start = st.button("🚀 Start the Analysis")
-        if start:
-            st.session_state.welcome_done = True
-            st.rerun()
+    st.markdown(welcome_html, unsafe_allow_html=True)
 
-        st.stop()  # ⛔ prevents rest of dashboard from loading
+    start = st.button("🚀 Start the Analysis")
+    if start:
+        st.session_state.welcome_done = True
+        st.rerun()
+
+    st.stop()  # ⛔ prevents rest of dashboard from loading
 
 
     # -------------------- 1. Data upload --------------------
