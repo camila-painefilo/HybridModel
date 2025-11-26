@@ -872,6 +872,17 @@ and any binary classification workflow.
                         f"**F1-score (thr=0.5):** {f1_tree:.4f}"
                     )
 
+                    # Confusion matrix — Decision Tree
+                    cm_tree = confusion_matrix(y_test, preds_tree)
+                    cm_tree_df = pd.DataFrame(
+                        cm_tree,
+                        index=["True 0 (good)", "True 1 (bad)"],
+                        columns=["Pred 0 (good)", "Pred 1 (bad)"],
+                    )
+                    st.markdown("**Confusion matrix — Decision Tree (test set)**")
+                    st.dataframe(cm_tree_df, use_container_width=True)
+
+
                 st.divider()
 
                 # Hybrid Tree → Logit
@@ -931,6 +942,17 @@ and any binary classification workflow.
                             f"**Accuracy:** {acc_hybrid:.4f} · "
                             f"**F1-score (thr=0.5):** {f1_hybrid:.4f}"
                         )
+
+                        # Confusion matrix — Hybrid Model
+                        cm_hybrid = confusion_matrix(y_test, preds_hybrid)
+                        cm_hybrid_df = pd.DataFrame(
+                            cm_hybrid,
+                            index=["True 0 (good)", "True 1 (bad)"],
+                            columns=["Pred 0 (good)", "Pred 1 (bad)"],
+                        )
+                        st.markdown("**Confusion matrix — Hybrid Model (test set)**")
+                        st.dataframe(cm_hybrid_df, use_container_width=True)
+
                         st.subheader("Hybrid vs other models (AUC / Accuracy / F1)")
                         st.dataframe(
                             comp_df.style.format(
