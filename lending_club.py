@@ -466,14 +466,15 @@ and any binary classification workflow.
  
     # -------------------- Tabs --------------------
     tab_data, tab_dist, tab_corr, tab_ttest, tab_balance, tab_pred, tab_logit = st.tabs([
-        "🧭 Data Exploration",
-        "📈 Data Visualization",
-        "🧮 Correlation Heatmap",
-        "📏 t-Tests",
-        "⚖️ Class Balancing",
-        "🔮 Prediction Models (Hybrid)",
-        "🧠 Model Interpretation"
-    ])
+    "🧭 Data Exploration",
+    "📈 Data Visualization",
+    "🧮 Correlation Heatmap",
+    "📏 t-Tests & Stepwise",
+    "⚖️ Class Balancing",
+    "🔮 Prediction Models (Hybrid)",
+    "🧠 Model Interpretation"
+])
+
 
     # ========== Data Exploration ==========
     with tab_data:
@@ -791,6 +792,101 @@ and any binary classification workflow.
                             res["significant"] = res["p_value"] < 0.05
                         st.dataframe(res, use_container_width=True)
                         st.caption("Welch’s t-test with 95% CI and effect sizes.")
+                                              
+                                                # ===== Save t-test significant features for later use =====
+                        if apply_fdr and "q_value" in res.columns:
+                            sig_vars_ttest = res.loc[res["q_value"] < 0.05, "variable"].tolist()
+                        else:
+                            sig_vars_ttest = res.loc[res["p_value"] < 0.05, "variable"].tolist()
+
+                        st.session_state["ttest_sig_features"] = sig_vars_ttest
+
+                        if sig_vars_ttest:
+                            st.success(
+                                f"{len(sig_vars_ttest)} variables are significant from t-tests "
+                                f"(saved for feature selection)."
+                            )
+                            st.caption(", ".join(sig_vars_ttest))
+                        else:
+                            st.info(
+                                "No variables are significant at α = 0.05. "
+                                "Stepwise selection can still be run on all numeric features."
+                            )
+                                                    st.markdown("---")
+                        st.subheader("Forward stepwise logistic regression (independent of t-tests)")
+
+                        # Build modeling matrix for stepwise
+                        d_model_sw = build_model_matrix(df)
+                        if d_model_sw.empty:
+                            st.info("Not enough numeric features or valid 0/1 target to run stepwise selection.")
+                        else:
+                            X_sw_all = d_model_sw.drop(columns=["target"])
+                            y_sw_all = d_model_sw["target"].astype(int)
+
+                            from sklearn.model_selection import train_test_split as tts
+
+                            X_train_sw, X_temp_sw, y_train_sw, y_temp_sw = tts(
+                                X_sw_all, y_sw_all,
+                                test_size=test_size,
+                                random_state=int(random_state),
+                                stratify=y_sw_all
+                            )
+                            X_val_sw, X_test_sw, y_val_sw, y_test_sw = tts(
+                                X_temp_sw, y_temp_sw,
+                                test_size=0.5,
+                                random_state=int(random_state),
+                                stratify=y_temp_sw
+                            )
+
+                            max_allowed_sw = min(20, X_sw_all.shape[1])
+                            min_allowed_sw = min(3, max_allowed_sw)
+
+                            max_feats_sw = st.slider(
+                                "Maximum number of features to select (stepwise)",
+                                min_value=min_allowed_sw,
+                                max_value=max_allowed_sw,
+                                value=min_allowed_sw,
+                                key="stepwise_max_feats_ttest_tab",
+                                help="Stepwise uses validation AUC to add features one-by-one."
+                            )
+
+                            if st.button("Run stepwise selection", key="btn_stepwise_ttest_tab"):
+                                feats_sw = stepwise_select_features(
+                                    X_train_sw, y_train_sw,
+                                    X_val_sw, y_val_sw,
+                                    max_features=max_feats_sw
+                                )
+                                if not feats_sw:
+                                    st.warning("Stepwise did not find any feature that improves AUC over the baseline.")
+                                else:
+                                    st.success(
+                                        f"Stepwise selected {len(feats_sw)} features:\n\n" + ", ".join(feats_sw)
+                                    )
+                                    # Save raw stepwise features
+                                    st.session_state["stepwise_features"] = feats_sw
+
+                                    # ===== Combine t-test & stepwise =====
+                                    ttest_feats = st.session_state.get("ttest_sig_features", [])
+                                    inter = sorted(set(ttest_feats) & set(feats_sw))
+
+                                    if inter:
+                                        final_feats = inter
+                                        st.success(
+                                            f"Final feature set for modeling (t-test ∩ stepwise): "
+                                            f"{len(final_feats)} features."
+                                        )
+                                        st.caption(", ".join(final_feats))
+                                    else:
+                                        # fallback: if no overlap, use stepwise-only
+                                        final_feats = feats_sw
+                                        st.warning(
+                                            "No overlap between t-test-significant and stepwise-selected variables. "
+                                            "Using stepwise-selected features only for modeling."
+                                        )
+
+                                    # Save final feature set for Prediction Models tab
+                                    st.session_state["selected_features_for_modeling"] = final_feats
+                                    st.caption("✅ Final feature set saved for the Prediction Models tab.")
 
         st.markdown('</div>', unsafe_allow_html=True)
     # ========== Class Balancing ==========
@@ -878,7 +974,27 @@ and any binary classification workflow.
                 if d_model.empty:
                     st.info("Not enough numeric features or valid 0/1 target after preprocessing.")
                 else:
-                    X = d_model.drop(columns=["target"])
+                    all_feats = [c for c in d_model.columns if c != "target"]
+        
+                    # 🔍 Use final feature set from t-Tests & Stepwise tab (if exists)
+                    selected_feats = st.session_state.get("selected_features_for_modeling")
+        
+                    if selected_feats:
+                        selected_feats = [f for f in selected_feats if f in all_feats]
+                    if selected_feats:
+                        used_feats = selected_feats
+                        st.success(
+                            f"Using {len(used_feats)} features selected by t-tests AND stepwise:\n\n"
+                            + ", ".join(used_feats)
+                        )
+                    else:
+                        used_feats = all_feats
+                        st.info(
+                            f"No final feature set found yet. "
+                            f"Using all {len(used_feats)} numeric features for modeling."
+                        )
+        
+                    X = d_model[used_feats]
                     y = d_model["target"].astype(int)
         
                     X_train, X_test, y_train, y_test = train_test_split(
@@ -887,7 +1003,8 @@ and any binary classification workflow.
                         random_state=int(random_state),
                         stratify=y
                     )
-                    st.markdown(f"**Number of numeric features used for modeling:** {X.shape[1]}")
+                    st.markdown(f"**Number of features used for modeling:** {len(used_feats)}")
+ 
         
                     # ⭐ NEW: apply class balancing option (TRAIN only)
                     balance_method = st.session_state.get("balance_method", "None")
@@ -1166,66 +1283,7 @@ and any binary classification workflow.
                         else:
                             st.info("Run at least two models to compare them.")
                                             
-                        
-
-                # Stepwise (expander)
-                with st.expander("Advanced: Forward stepwise feature selection + Logistic Regression"):
-                    d_model_sw = build_model_matrix(df)
-                    if d_model_sw.empty:
-                        st.info("Not enough numeric features or valid target to run stepwise selection.")
-                    else:
-                        from sklearn.model_selection import train_test_split as tts
-                        X_sw = d_model_sw.drop(columns=["target"])
-                        y_sw = d_model_sw["target"].astype(int)
-                        X_train_sw, X_temp_sw, y_train_sw, y_temp_sw = tts(
-                            X_sw, y_sw,
-                            test_size=test_size,
-                            random_state=int(random_state),
-                            stratify=y_sw
-                        )
-                        X_val_sw, X_test_sw, y_val_sw, y_test_sw = tts(
-                            X_temp_sw, y_temp_sw,
-                            test_size=0.5,
-                            random_state=int(random_state),
-                            stratify=y_temp_sw
-                        )
-                        st.write(f"Feature pool size for stepwise: **{X_sw.shape[1]}** numeric columns.")
-                        max_allowed_sw = min(20, X_sw.shape[1])
-                        min_allowed_sw = min(3, max_allowed_sw)
-                        max_feats_sw = st.slider(
-                            "Maximum number of features to select (stepwise)",
-                            min_value=min_allowed_sw,
-                            max_value=max_allowed_sw,
-                            value=min_allowed_sw,
-                            key="stepwise_max_feats_main"
-                        )
-                        if st.button("Run stepwise + Logit", key="btn_stepwise_main"):
-                            feats_sw = stepwise_select_features(
-                                X_train_sw, y_train_sw, X_val_sw, y_val_sw,
-                                max_features=max_feats_sw
-                            )
-                            if not feats_sw:
-                                st.warning("Stepwise did not find any feature that improves AUC over baseline.")
-                            else:
-                                st.write("**Stepwise-selected features:**", ", ".join(feats_sw))
-                                model_sw = LogisticRegression(
-                                    max_iter=1000,
-                                    solver="liblinear",
-                                    class_weight="balanced"
-                                )
-                                model_sw.fit(X_train_sw[feats_sw], y_train_sw)
-                                probs_sw = model_sw.predict_proba(X_test_sw[feats_sw])[:, 1]
-                                preds_sw = (probs_sw >= 0.5).astype(int)
-                                auc_sw = roc_auc_score(y_test_sw, probs_sw)
-                                acc_sw = accuracy_score(y_test_sw, preds_sw)
-                                f1_sw = f1_score(y_test_sw, preds_sw)
-                                st.write(
-                                    f"**Stepwise Logit — Test AUC:** {auc_sw:.4f} · "
-                                    f"**Accuracy:** {acc_sw:.4f} · "
-                                    f"**F1-score (thr=0.5):** {f1_sw:.4f}"
-                                )
-
-        st.markdown('</div>', unsafe_allow_html=True)
+                    
 
     # ========== Logit Interpretation ==========
     with tab_logit:
