@@ -881,14 +881,7 @@ and any binary classification workflow ⚡
                                 max_allowed_sw = X_sw_all.shape[1]   # allow all features
                                 min_allowed_sw = min(3, max_allowed_sw)
                                 
-                                max_feats_sw = st.slider(
-                                    "Maximum number of features to select (stepwise)",
-                                    min_value=min_allowed_sw,
-                                    max_value=max_allowed_sw,
-                                    value=min_allowed_sw,
-                                    key="stepwise_max_feats_ttest_tab",
-                                    help="Stepwise uses validation AUC to add features one-by-one (no artificial cap)."
-                                )
+                                
 
 
                                 # ⚠️ Avoid slider crash when min == max
