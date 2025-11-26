@@ -496,13 +496,22 @@ and any binary classification workflow.
         st.dataframe(head_df, use_container_width=True)
 
         st.markdown("#### Statistical summary (`describe`)")
-        desc = sample.describe(include="all").T
-        for col in desc.columns:
-            try:
-                desc[col] = pd.to_numeric(desc[col], errors="coerce").round(3).combine_first(desc[col])
-            except Exception:
-                pass
-        st.dataframe(desc, use_container_width=True)
+        
+        # Numeric summary
+        num_sample = sample.select_dtypes(include=["number"])
+        if not num_sample.empty:
+            st.markdown("##### Numeric summary")
+            desc_num = num_sample.describe().T
+            # redondear numéricos
+            desc_num = desc_num.round(3)
+            st.dataframe(desc_num, use_container_width=True)
+
+        # Categorical summary
+        cat_sample = sample.select_dtypes(exclude=["number"])
+        if not cat_sample.empty:
+            st.markdown("##### Categorical summary")
+            desc_cat = cat_sample.describe().T
+            st.dataframe(desc_cat, use_container_width=True)
 
         st.markdown('</div>', unsafe_allow_html=True)
 
