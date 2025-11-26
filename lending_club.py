@@ -81,8 +81,11 @@ def main():
             st.markdown("## 💳 Welcome to the Hybrid Model Agent")
             st.markdown(
                 """
-A flexible and intelligent platform for  - tabular data exploration 📊,
-- statistical testing 📏, - feature selection, and - hybrid predictive modeling 🤖.
+A flexible and intelligent platform for  
+- tabular data exploration 📊
+- statistical testing 📏
+- feature selection 🎯
+- hybrid predictive modeling 🤖
 
 Designed for credit scoring, churn prediction, customer analytics,
 and any binary classification workflow ⚡
