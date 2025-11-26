@@ -21,6 +21,8 @@ google-auth-oauthlib==1.2.1
 transformers==4.45.2
 tokenizers==0.20.3
 seaborn==0.13.2
+imbalanced-learn
+
 
 
 
