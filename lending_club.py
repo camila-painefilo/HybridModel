@@ -42,7 +42,7 @@ def main():
 
     # -------------------- HERO + WELCOME --------------------
     TITLE = "Hybrid Model Agent"
-    SUBTITLE = "Unified EDA, statistical tests, and predictive modeling in one intelligent agent"
+    SUBTITLE = "Unified EDA, statistical tests, and predictive modeling in One Intelligent Agent"
     LOGO_URL = "https://img.freepik.com/premium-photo/friendly-looking-ai-agent-as-logo-white-background-style-raw-job-id-ef2c5ef7e19b4dadbef969fcb37e_343960-103720.jpg"
 
     st.markdown(
