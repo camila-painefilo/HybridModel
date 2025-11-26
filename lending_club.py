@@ -21,6 +21,7 @@ def main():
     from sklearn.pipeline import Pipeline
     import statsmodels.api as sm
     from pandas.api.types import is_numeric_dtype
+    from imblearn.over_sampling import SMOTE
 
     # -------------------- Page & Theme --------------------
     st.set_page_config(page_title="Hybrid Model Agent", page_icon="💳", layout="wide")
@@ -780,30 +781,50 @@ and any binary classification workflow.
         if "target" not in df.columns:
             st.info("No 'target' column found.")
         else:
-            counts = pd.to_numeric(df["target"], errors="coerce").value_counts().to_dict()
-            st.write("**Current target distribution (0 = good, 1 = bad):**")
-            st.write(counts)
+            t_raw = pd.to_numeric(df["target"], errors="coerce")
+            counts = t_raw.value_counts().sort_index()
+            
+            # 🎨 Nice-looking summary box 
+            st.markdown("""
+            <div style="
+                padding:15px;
+                border-radius:12px;
+                background-color:#f7f9fc;
+                border:1px solid #e3e6ee;
+                margin-bottom:10px;
+            ">
+                <b>Current target distribution</b> (0 = good, 1 = bad):
+            </div>
+            """, unsafe_allow_html=True)
+            
+            # Two side-by-side cards 
+            c1, c2 = st.columns(2)
+            with c1:
+                st.metric("Class 0 count", f"{counts.get(0,0):,}")
+            with c2:
+                st.metric("Class 1 count", f"{counts.get(1,0):,}")
 
-            # opción guardada en sesión
-            default_method = st.session_state.get("balance_method", "None")
-
+            st.markdown("---")
+            
+            # Save choice in session
             method = st.radio(
-                "Select balancing method (applied only to TRAIN set before modeling)",
+                "Select balancing method",
                 ["None", "Undersampling", "SMOTE"],
-                index=["None", "Undersampling", "SMOTE"].index(default_method),
+                index=["None", "Undersampling", "SMOTE"].index(
+                    st.session_state.get("balance_method", "None")
+                ),
             )
-
             st.session_state.balance_method = method
-
+            
+            # Explanation message
             if method == "None":
-                st.info("No re-sampling will be applied. Models will use the original train split.")
+                st.info("No balancing will be applied. Models will use the original training split.")
             elif method == "Undersampling":
-                st.warning("Random undersampling will downsample the majority class in the TRAIN set.")
+                st.warning("Undersampling will downsample the majority class in the **train** set.")
             else:
-                st.warning("SMOTE will generate synthetic observations for the minority class in the TRAIN set.")
+                st.warning("SMOTE will generate synthetic samples for the minority class in the **train** set.")
 
         st.markdown('</div>', unsafe_allow_html=True)
-
 
     # ========== Prediction Models ==========
     with tab_pred:
