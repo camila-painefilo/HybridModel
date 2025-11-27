@@ -672,15 +672,34 @@ and any binary classification workflow ⚡
                         cols_base.append("target")
     
                     df_line = df[cols_base].copy()
+        
+                    # Parse the selected date column again (multi-format, similar to sidebar)
+                    def parse_dates_for_chart(series):
+                        """Try multiple formats to parse dates for the line chart."""
+                        s = series.astype(str).str.strip()
     
-                    # Parse the selected date column again
-                    dt = pd.to_datetime(df[date_col_choice], errors="coerce")
+                        parsed = pd.to_datetime(s, errors="coerce")
+                        if parsed.notna().mean() < 0.3:
+                            # Format like "Dec-17"
+                            parsed = pd.to_datetime(s, format="%b-%y", errors="coerce")
+                        if parsed.notna().mean() < 0.3:
+                            # Format like "Dec-2017"
+                            parsed = pd.to_datetime(s, format="%b-%Y", errors="coerce")
+                        if parsed.notna().mean() < 0.3:
+                            # Format like "16-mar" (= 2016-Mar)
+                            parsed = pd.to_datetime(s, format="%y-%b", errors="coerce")
+    
+                        return parsed
+    
+                    dt = parse_dates_for_chart(df[date_col_choice])
+    
                     df_line["__year__"] = dt.dt.year
                     df_line["__month__"] = dt.dt.month
                     df_line["__year_month__"] = dt.dt.to_period("M").astype(str)
     
                     # Drop rows with invalid dates
                     df_line = df_line.dropna(subset=["__year__"])
+
     
                     # Choose the time key based on granularity
                     if granularity == "Year":
