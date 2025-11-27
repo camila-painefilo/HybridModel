@@ -438,12 +438,18 @@ and any binary classification workflow ⚡
     st.write("")
 
     # -------------------- EDA variables (fixed) --------------------
-    REQUIRED = ["loan_amnt", "int_rate", "delinq_2yrs", "annual_inc", "dti"]
     df_eda = df.copy()
-    EDA_VARS = [c for c in REQUIRED if c in df_eda.columns and is_numeric_dtype(df_eda[c])]
-    missing_req = [c for c in REQUIRED if c not in EDA_VARS]
-    if missing_req:
-        st.warning("These requested variables are absent or non-numeric in the filtered data: " + ", ".join(missing_req))
+
+    # Use all numeric columns except the target for EDA charts
+    EDA_VARS = (
+        df_eda.select_dtypes(include=[np.number])
+              .columns
+              .drop(["target"], errors="ignore")
+              .tolist()
+    )
+
+    if not EDA_VARS:
+        st.warning("No numeric variables available for EDA charts.")
 
     def get_featured_vars(df_num, k=6):
         numeric_pool = [c for c in df_num.select_dtypes(include=[np.number]).columns if c != "target"]
