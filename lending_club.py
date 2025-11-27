@@ -943,44 +943,46 @@ and any binary classification workflow ⚡
                                     # 🔧 Stepwise будет рассматривать все кандидатные признаки.
                                     # Он сам остановится, когда добавление новой переменной
                                     # перестанет улучшать AUC на валидации.
-                                    max_feats_sw = X_sw_all.shape[1]
-                                
-                                    st.caption(
-                                        f"Stepwise candidate pool: {max_feats_sw} variables that passed the t-tests. "
-                                        "The algorithm will automatically decide how many features to keep."
+                                # 🔧 Stepwise рассматривает весь пул признаков
+                                max_feats_sw = X_sw_all.shape[1]
+                            
+                                st.caption(
+                                    f"Stepwise candidate pool: {max_feats_sw} variables that passed the t-tests. "
+                                    "The algorithm will automatically decide how many features to keep."
+                                )
+                            
+                                if st.button("Run stepwise selection", key="btn_stepwise_ttest_tab"):
+                                    feats_sw = stepwise_select_features(
+                                        X_train_sw, y_train_sw,
+                                        X_val_sw, y_val_sw,
+                                        max_features=max_feats_sw,
                                     )
-                                
-                                    if st.button("Run stepwise selection", key="btn_stepwise_ttest_tab"):
-                                        feats_sw = stepwise_select_features(
-                                            X_train_sw, y_train_sw,
-                                            X_val_sw, y_val_sw,
-                                            max_features=max_feats_sw,
+                            
+                                    if not feats_sw:
+                                        st.warning(
+                                            "Stepwise did not find any feature that improves AUC over the baseline."
                                         )
-                                        if not feats_sw:
-                                            st.warning(
-                                                "Stepwise did not find any feature that improves AUC over the baseline."
-                                            )
-                                        else:
-                                            st.success(
-                                                f"Stepwise selected {len(feats_sw)} features "
-                                                f"(from {max_feats_sw} candidates):\n\n"
-                                                + ", ".join(feats_sw)
-                                            )
-                                
-                                            # Save raw stepwise features
-                                            st.session_state["stepwise_features"] = feats_sw
-                                
-                                            # ✅ Final feature set for modeling
-                                            final_feats = feats_sw
-                                            st.success(
-                                                f"Final feature set for modeling (t-test → stepwise): "
-                                                f"{len(final_feats)} features."
-                                            )
-                                            st.caption(", ".join(final_feats))
-                                
-                                            # Save final feature set for Prediction Models tab
-                                            st.session_state["selected_features_for_modeling"] = final_feats
-                                            st.caption("✅ Final feature set saved for the Prediction Models tab.")
+                                    else:
+                                        st.success(
+                                            f"Stepwise selected {len(feats_sw)} features "
+                                            f"(from {max_feats_sw} candidates):\n\n"
+                                            + ", ".join(feats_sw)
+                                        )
+                            
+                                        # Save raw stepwise features
+                                        st.session_state["stepwise_features"] = feats_sw
+                            
+                                        # ✅ Final feature set for modeling
+                                        final_feats = feats_sw
+                                        st.success(
+                                            f"Final feature set for modeling (t-test → stepwise): "
+                                            f"{len(final_feats)} features."
+                                        )
+                                        st.caption(", ".join(final_feats))
+                            
+                                        # Save final feature set for Prediction Models tab
+                                        st.session_state["selected_features_for_modeling"] = final_feats
+                                        st.caption("✅ Final feature set saved for the Prediction Models tab.")
 
 
         st.markdown('</div>', unsafe_allow_html=True)
