@@ -267,38 +267,76 @@ and any binary classification workflow ⚡
         if col in df_full and not pd.api.types.is_numeric_dtype(df_full[col]):
             df_full[col] = to_float_pct(df_full[col])
 
-    if "issue_year" not in df_full.columns and "issue_d" in df_full.columns:
-        issue_dt = pd.to_datetime(df_full["issue_d"], errors="coerce", format="%b-%Y")
-        if issue_dt.isna().all():
-            issue_dt = pd.to_datetime(df_full["issue_d"], errors="coerce")
-        df_full["issue_year"] = issue_dt.dt.year
-
     # -------------------- Sidebar Filters --------------------
-    with st.sidebar:
-        st.subheader("Filters")
+with st.sidebar:
+    st.subheader("Filters")
 
-        year_range = None
-        if "issue_year" in df_full.columns and df_full["issue_year"].notna().any():
-            years = pd.to_numeric(df_full["issue_year"], errors="coerce").dropna().astype(int)
+    # 1) Detect possible date-like columns
+    date_candidates = []
+    for c in df_full.columns:
+        # Already datetime dtype
+        if pd.api.types.is_datetime64_any_dtype(df_full[c]):
+            date_candidates.append(c)
+        # Strings that look like potential date columns
+        elif df_full[c].dtype == "object":
+            col_lower = c.lower()
+            if any(key in col_lower for key in ["date", "time", "issue", "pymnt", "pay", "earliest", "last"]):
+                date_candidates.append(c)
+
+    date_candidates = sorted(set(date_candidates))
+
+    # 2) Let the user choose a date column manually
+    date_col_choice = None
+    if date_candidates:
+        date_col_choice = st.selectbox(
+            "Select a date column to derive 'issue_year' (optional)",
+            options=["(None)"] + date_candidates,
+            index=0,
+            help="If selected, the system extracts the year and creates an 'issue_year' column."
+        )
+    else:
+        st.caption("No date-like columns detected.")
+
+    # 3) Create issue_year if the user selected a valid date column
+    if date_col_choice and date_col_choice != "(None)":
+        parsed_dates = pd.to_datetime(df_full[date_col_choice], errors="coerce")
+        valid_ratio = parsed_dates.notna().mean()
+
+        # Requires at least 30% valid dates
+        if valid_ratio >= 0.3:
+            df_full["issue_year"] = parsed_dates.dt.year
+        else:
+            st.warning(
+                f"Column '{date_col_choice}' does not appear to be a valid date column "
+                f"({valid_ratio*100:.1f}% valid dates)."
+            )
+
+    # 4) Year filter (only appears if issue_year exists)
+    year_range = None
+    if "issue_year" in df_full.columns and df_full["issue_year"].notna().any():
+        years = pd.to_numeric(df_full["issue_year"], errors="coerce").dropna().astype(int)
+        if not years.empty:
             min_year, max_year = int(years.min()), int(years.max())
             year_range = st.slider(
                 "Filter by Issue Year",
                 min_value=min_year,
                 max_value=max_year,
-                value=(min_year, max_year)
+                value=(min_year, max_year),
             )
-        else:
-            st.caption("No issue_year column found — charts won’t filter by year.")
+    else:
+        st.caption("No 'issue_year' detected — line charts will not use year grouping.")
 
-        grade_sel = None
-        if "grade" in df_full.columns:
-            opts = sorted(pd.Series(df_full["grade"]).dropna().astype(str).unique().tolist())
-            grade_sel = st.multiselect("Grade", options=opts, default=[])
+    # 5) Other existing filters (unchanged)
+    grade_sel = None
+    if "grade" in df_full.columns:
+        opts = sorted(pd.Series(df_full["grade"]).dropna().astype(str).unique().tolist())
+        grade_sel = st.multiselect("Grade", options=opts, default=[])
 
-        term_sel = None
-        if "term" in df_full.columns:
-            term_opts = pd.Series(df_full["term"]).dropna().astype(str).unique().tolist()
-            term_sel = st.multiselect("Term", options=term_opts, default=[])
+    term_sel = None
+    if "term" in df_full.columns:
+        term_opts = pd.Series(df_full["term"]).dropna().astype(str).unique().tolist()
+        term_sel = st.multiselect("Term", options=term_opts, default=[])
+
 
     # -------------------- Apply Filters --------------------
     df = df_full.copy()
