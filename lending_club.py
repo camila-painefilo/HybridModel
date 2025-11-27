@@ -1444,6 +1444,7 @@ and any binary classification workflow ⚡
                         "Model": label,
                         "AUC": m["AUC"],
                         "Accuracy": m["Accuracy"],
+                        "F1": m["F1"],
                         "Precision": m["Precision"],
                         "Recall": m["Recall"],
                         "TN": tn,
@@ -1466,6 +1467,7 @@ and any binary classification workflow ⚡
                     st.dataframe(
                         comp_df_all.style.format(
                             {"AUC": "{:.4f}", "Accuracy": "{:.4f}",
+                            "F1" : "{:.4f}",
                              "Precision": "{:.4f}", "Recall": "{:.4f}"}
                         ),
                         use_container_width=True,
