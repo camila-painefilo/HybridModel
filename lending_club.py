@@ -326,16 +326,6 @@ and any binary classification workflow ⚡
         else:
             st.caption("No 'issue_year' detected — line charts will not use year grouping.")
     
-        # 5) Other existing filters (unchanged)
-        grade_sel = None
-        if "grade" in df_full.columns:
-            opts = sorted(pd.Series(df_full["grade"]).dropna().astype(str).unique().tolist())
-            grade_sel = st.multiselect("Grade", options=opts, default=[])
-    
-        term_sel = None
-        if "term" in df_full.columns:
-            term_opts = pd.Series(df_full["term"]).dropna().astype(str).unique().tolist()
-            term_sel = st.multiselect("Term", options=term_opts, default=[])
 
 
     # -------------------- Apply Filters --------------------
