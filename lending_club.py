@@ -623,71 +623,107 @@ and any binary classification workflow ⚡
 
             # Line chart
             if show_line:
-                time_candidates = [c for c in ["issue_year", "issue_d"] if c in df.columns]
-                if not time_candidates:
-                    time_col = None
-                    st.info("No time column available (e.g., issue_year or issue_d).")
+                # We require a date column selected in the sidebar
+                if not (date_col_choice and date_col_choice != "(None)" and date_col_choice in df.columns):
+                    st.info("Please select a valid date column in the sidebar to enable the line chart.")
                 else:
-                    time_col = st.selectbox(
-                        "Time column for line chart",
-                        options=time_candidates,
+                    y_var = st.selectbox(
+                        "Y variable",
+                        options=EDA_VARS,
+                        index=(EDA_VARS.index("loan_amnt") if "loan_amnt" in EDA_VARS else 0),
+                        key="line_y_var"
+                    )
+    
+                    agg_choice = st.selectbox(
+                        "Aggregation",
+                        ["Mean", "Median", "Count"],
                         index=0,
-                        help="Uses issue_year if available; otherwise choose a time-like column."
+                        key="line_agg"
                     )
-
-                y_var = st.selectbox(
-                    "Y variable",
-                    options=EDA_VARS,
-                    index=(EDA_VARS.index("loan_amnt") if "loan_amnt" in EDA_VARS else 0),
-                    key="line_y_var"
-                )
-                agg_choice = st.selectbox("Aggregation", ["Mean", "Median", "Count"], index=0, key="line_agg")
-
-                if not time_col:
-                    st.info("No time column available, so the line chart cannot be drawn.")
-                else:
-                    df_line = df[[time_col, y_var] + (["target"] if "target" in df.columns else [])].copy()
-                    if time_col == "issue_year":
-                        df_line["__time__"] = pd.to_numeric(df_line[time_col], errors="coerce")
-                    else:
-                        dt = pd.to_datetime(df_line[time_col], errors="coerce")
-                        df_line["__time__"] = dt.dt.year
-                    df_line = df_line.dropna(subset=["__time__"])
-
-                    if agg_choice == "Mean":
-                        agg_func, y_enc_title = "mean", f"Mean {y_var}"
-                    elif agg_choice == "Median":
-                        agg_func, y_enc_title = "median", f"Median {y_var}"
-                    else:
-                        agg_func, y_enc_title = "count", f"Count ({y_var} non-null)"
-
-                    if "target" in df_line.columns:
-                        g = df_line.groupby(["__time__", "target"], observed=False)
-                    else:
-                        g = df_line.groupby(["__time__"], observed=False)
-
-                    plot_df = (
-                        g[y_var].count().reset_index(name="y")
-                        if agg_choice == "Count"
-                        else g[y_var].agg(agg_func).reset_index(name="y")
+    
+                    # New control: time granularity
+                    granularity = st.radio(
+                        "Time granularity for line chart",
+                        ["Year", "Month", "Year-Month"],
+                        index=0,
+                        horizontal=True,
+                        key="line_time_granularity"
                     )
-
-                    enc_color = alt.Color("target:N", title="target") if "target" in plot_df.columns else alt.value(None)
-
-                    line = (
-                        alt.Chart(plot_df)
-                        .mark_line(point=True)
-                        .encode(
-                            x=alt.X("__time__:O", title=("Issue Year" if time_col == "issue_year" else time_col)),
-                            y=alt.Y("y:Q", title=y_enc_title),
-                            color=enc_color,
-                            tooltip=[alt.Tooltip("__time__:O", title="Time"),
-                                     alt.Tooltip("y:Q", title=y_enc_title, format=".2f")]
-                                    + ([alt.Tooltip("target:N", title="target")] if "target" in plot_df.columns else [])
+    
+                    # Build working dataframe
+                    cols_base = [y_var]
+                    if "target" in df.columns:
+                        cols_base.append("target")
+    
+                    df_line = df[cols_base].copy()
+    
+                    # Parse the selected date column again
+                    dt = pd.to_datetime(df[date_col_choice], errors="coerce")
+                    df_line["__year__"] = dt.dt.year
+                    df_line["__month__"] = dt.dt.month
+                    df_line["__year_month__"] = dt.dt.to_period("M").astype(str)
+    
+                    # Drop rows with invalid dates
+                    df_line = df_line.dropna(subset=["__year__"])
+    
+                    # Choose the time key based on granularity
+                    if granularity == "Year":
+                        time_key = "__year__"
+                        x_title = "Year"
+                    elif granularity == "Month":
+                        time_key = "__month__"
+                        x_title = "Month (1–12)"
+                    else:  # "Year-Month"
+                        time_key = "__year_month__"
+                        x_title = "Year-Month"
+    
+                    if df_line.empty:
+                        st.info("No valid dates available to draw the line chart.")
+                    else:
+                        # Aggregation
+                        if agg_choice == "Mean":
+                            agg_func, y_enc_title = "mean", f"Mean {y_var}"
+                        elif agg_choice == "Median":
+                            agg_func, y_enc_title = "median", f"Median {y_var}"
+                        else:
+                            agg_func, y_enc_title = "count", f"Count ({y_var} non-null)"
+    
+                        # Group by time (and target if available)
+                        if "target" in df_line.columns:
+                            g = df_line.groupby([time_key, "target"], observed=False)
+                        else:
+                            g = df_line.groupby([time_key], observed=False)
+    
+                        if agg_choice == "Count":
+                            plot_df = g[y_var].count().reset_index(name="y")
+                        else:
+                            plot_df = g[y_var].agg(agg_func).reset_index(name="y")
+    
+                        # Color encoding if target exists
+                        enc_color = (
+                            alt.Color("target:N", title="target")
+                            if "target" in plot_df.columns
+                            else alt.value(None)
                         )
-                        .properties(height=300, title=f"{agg_choice} {y_var} by {time_col}")
-                    )
-                    st.altair_chart(line, use_container_width=True)
+    
+                        line = (
+                            alt.Chart(plot_df)
+                            .mark_line(point=True)
+                            .encode(
+                                x=alt.X(f"{time_key}:O", title=x_title),
+                                y=alt.Y("y:Q", title=y_enc_title),
+                                color=enc_color,
+                                tooltip=[alt.Tooltip(f"{time_key}:O", title="Time"),
+                                         alt.Tooltip("y:Q", title=y_enc_title, format=".2f")]
+                                        + ([alt.Tooltip("target:N", title="target")] if "target" in plot_df.columns else [])
+                            )
+                            .properties(
+                                height=300,
+                                title=f"{agg_choice} {y_var} by {granularity}"
+                            )
+                        )
+                        st.altair_chart(line, use_container_width=True)
+
 
             # Histogram
             if show_hist:
