@@ -350,16 +350,11 @@ and any binary classification workflow ⚡
 
 
         
-        # 5) Other existing filters (unchanged)
+        # 5) Other filters (disabled – no widgets shown)
+        # We still define the variables so that the rest of the code does not fail.
         grade_sel = None
-        if "grade" in df_full.columns:
-            opts = sorted(pd.Series(df_full["grade"]).dropna().astype(str).unique().tolist())
-            grade_sel = st.multiselect("Grade", options=opts, default=[])
-    
         term_sel = None
-        if "term" in df_full.columns:
-            term_opts = pd.Series(df_full["term"]).dropna().astype(str).unique().tolist()
-            term_sel = st.multiselect("Term", options=term_opts, default=[])
+
 
     # -------------------- Apply Filters --------------------
     df = df_full.copy()
