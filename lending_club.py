@@ -297,12 +297,24 @@ and any binary classification workflow ⚡
         else:
             st.caption("No date-like columns detected.")
     
-        # 3) Create issue_year if the user selected a valid date column
+        # 3) Create issue_year using intelligent multi-format parsing
         if date_col_choice and date_col_choice != "(None)":
-            parsed_dates = pd.to_datetime(df_full[date_col_choice], errors="coerce")
+            raw_col = df_full[date_col_choice]
+        
+            # Attempt 1: Generic parsing (works for most formats)
+            parsed_dates = pd.to_datetime(raw_col, errors="coerce")
+            
+            # Attempt 2: Lending Club format: "Dec-17"
+            if parsed_dates.notna().mean() < 0.3:
+                parsed_dates = pd.to_datetime(raw_col, format="%b-%y", errors="coerce")
+        
+            # Attempt 3: Format like "Dec-2017"
+            if parsed_dates.notna().mean() < 0.3:
+                parsed_dates = pd.to_datetime(raw_col, format="%b-%Y", errors="coerce")
+        
+            # Final validation
             valid_ratio = parsed_dates.notna().mean()
-    
-            # Requires at least 30% valid dates
+        
             if valid_ratio >= 0.3:
                 df_full["issue_year"] = parsed_dates.dt.year
             else:
@@ -310,6 +322,7 @@ and any binary classification workflow ⚡
                     f"Column '{date_col_choice}' does not appear to be a valid date column "
                     f"({valid_ratio*100:.1f}% valid dates)."
                 )
+
     
         # 4) Year filter (only appears if issue_year exists)
         year_range = None
