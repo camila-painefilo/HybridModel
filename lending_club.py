@@ -330,14 +330,24 @@ and any binary classification workflow ⚡
             years = pd.to_numeric(df_full["issue_year"], errors="coerce").dropna().astype(int)
             if not years.empty:
                 min_year, max_year = int(years.min()), int(years.max())
-                year_range = st.slider(
-                    "Filter by Issue Year",
-                    min_value=min_year,
-                    max_value=max_year,
-                    value=(min_year, max_year),
-                )
+        
+                if min_year == max_year:
+                    # Only one year -> no need for a slider
+                    st.caption(
+                        f"Only one year detected in the data: {min_year}. Year filter is disabled."
+                    )
+                    year_range = None  # no filtering by year
+                else:
+                    # Proper range slider when there is more than one year
+                    year_range = st.slider(
+                        "Filter by Issue Year",
+                        min_value=min_year,
+                        max_value=max_year,
+                        value=(min_year, max_year),
+                    )
         else:
             st.caption("No 'issue_year' detected — line charts will not use year grouping.")
+
 
         
         # 5) Other existing filters (unchanged)
