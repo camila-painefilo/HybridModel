@@ -299,23 +299,39 @@ and any binary classification workflow ⚡
     
         # 3) Create issue_year using intelligent multi-format parsing
         if date_col_choice and date_col_choice != "(None)":
-            raw_col = df_full[date_col_choice]
-        
-            # Attempt 1: Generic parsing (works for most formats)
+            raw_col = df_full[date_col_choice].astype(str).str.strip()
+    
+            def is_good_parse(parsed):
+                """Check if parsed dates are usable: enough valid & reasonable years."""
+                if parsed.notna().sum() == 0:
+                    return False
+                valid_ratio_local = parsed.notna().mean()
+                years = parsed.dt.year.dropna()
+                if years.empty:
+                    return False
+                # Avoid weird things like year 1900 dominating
+                median_year = years.median()
+                return (valid_ratio_local >= 0.3) and (median_year >= 1950)
+    
+            # Attempt 1: generic parsing
             parsed_dates = pd.to_datetime(raw_col, errors="coerce")
-            
-            # Attempt 2: Lending Club format: "Dec-17"
-            if parsed_dates.notna().mean() < 0.3:
+    
+            # Attempt 2: Lending Club style "Dec-17"
+            if not is_good_parse(parsed_dates):
                 parsed_dates = pd.to_datetime(raw_col, format="%b-%y", errors="coerce")
-        
-            # Attempt 3: Format like "Dec-2017"
-            if parsed_dates.notna().mean() < 0.3:
+    
+            # Attempt 3: "Dec-2017"
+            if not is_good_parse(parsed_dates):
                 parsed_dates = pd.to_datetime(raw_col, format="%b-%Y", errors="coerce")
-        
-            # Final validation
+    
+            # Attempt 4: "16-mar" meaning 2016-Mar (yy-MMM)
+            if not is_good_parse(parsed_dates):
+                parsed_dates = pd.to_datetime(raw_col, format="%y-%b", errors="coerce")
+    
+            # Final validation for message
             valid_ratio = parsed_dates.notna().mean()
-        
-            if valid_ratio >= 0.3:
+    
+            if is_good_parse(parsed_dates):
                 df_full["issue_year"] = parsed_dates.dt.year
             else:
                 st.warning(
