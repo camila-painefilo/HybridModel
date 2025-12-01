@@ -552,10 +552,9 @@ and any binary classification workflow ⚡
         return X_bal, y_bal
 
     # -------------------- Tabs --------------------
-    tab_data, tab_dist, tab_corr, tab_ttest, tab_balance, tab_pred = st.tabs([
+    tab_data, tab_dist, tab_ttest, tab_balance, tab_pred = st.tabs([
         "🧭 Data Exploration",
         "📈 Data Visualization",
-        "🧮 Correlation Heatmap",
         "📏 t-Tests & Stepwise",
         "⚖️ Class Balancing",
         "🔮 Prediction Models (Hybrid)"
@@ -834,7 +833,6 @@ and any binary classification workflow ⚡
         st.markdown('</div>', unsafe_allow_html=True)
 
     # ========== Correlation Heatmap ==========
-    with tab_corr:
         st.markdown('<div class="card">', unsafe_allow_html=True)
         st.subheader("Correlation Heatmap (numeric only)")
 
