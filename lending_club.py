@@ -189,7 +189,7 @@ and any binary classification workflow ⚡
 
     good_labels = st.multiselect(
         "GOOD class values (target = 0):",
-        options=sorted(default_good_labels),
+        options=sorted(labels),
         default=sorted(default_good_labels),
         help="Choose values that represent fully paid, retained customers, etc."
     )
