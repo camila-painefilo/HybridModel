@@ -552,10 +552,9 @@ and any binary classification workflow ⚡
         return X_bal, y_bal
 
     # -------------------- Tabs --------------------
-    tab_data, tab_dist, tab_corr, tab_ttest, tab_balance, tab_pred = st.tabs([
+    tab_data, tab_dist, tab_ttest, tab_balance, tab_pred = st.tabs([
         "🧭 Data Exploration",
         "📈 Data Visualization",
-        "🧮 Correlation Heatmap",
         "📏 t-Tests & Stepwise",
         "⚖️ Class Balancing",
         "🔮 Prediction Models (Hybrid)"
@@ -803,8 +802,8 @@ and any binary classification workflow ⚡
                             .properties(height=280, title=f"Histogram — {h_var}")
                         )
                     st.altair_chart(hist, use_container_width=True)
-
-            # Boxplot
+                    
+          # Boxplot
             if show_box:
                 if "target" not in df_eda.columns:
                     st.info("Boxplots require 'target' to group by.")
@@ -825,7 +824,10 @@ and any binary classification workflow ⚡
                             x=alt.X("target:N", title="target"),
                             y=alt.Y(f"{b_var}:Q", title=b_var),
                             color=alt.Color("target:N", legend=None),
-                            tooltip=[alt.Tooltip(f"{b_var}:Q", title=b_var), alt.Tooltip("target:N", title="target")]
+                            tooltip=[
+                                alt.Tooltip(f"{b_var}:Q", title=b_var),
+                                alt.Tooltip("target:N", title="target")
+                            ]
                         )
                         .properties(height=280, title=f"Boxplot — {b_var} by target")
                     )
@@ -833,8 +835,7 @@ and any binary classification workflow ⚡
 
         st.markdown('</div>', unsafe_allow_html=True)
 
-    # ========== Correlation Heatmap ==========
-    with tab_corr:
+        # ========== Correlation Heatmap (dentro de Data Visualization) ==========
         st.markdown('<div class="card">', unsafe_allow_html=True)
         st.subheader("Correlation Heatmap (numeric only)")
 
@@ -853,12 +854,21 @@ and any binary classification workflow ⚡
             corr_df = cmat.reset_index().melt("index")
             corr_df.columns = ["feature_x", "feature_y", "corr"]
 
-            heat = alt.Chart(corr_df).mark_rect().encode(
-                x=alt.X("feature_x:O", title="", sort=ordered),
-                y=alt.Y("feature_y:O", title="", sort=ordered),
-                color=alt.Color("corr:Q", scale=alt.Scale(scheme="blueorange", domain=[-1, 1])),
-                tooltip=["feature_x", "feature_y", alt.Tooltip("corr:Q", format=".2f")]
-            ).properties(height=420)
+            heat = (
+                alt.Chart(corr_df)
+                .mark_rect()
+                .encode(
+                    x=alt.X("feature_x:O", title="", sort=ordered),
+                    y=alt.Y("feature_y:O", title="", sort=ordered),
+                    color=alt.Color("corr:Q", scale=alt.Scale(scheme="blueorange", domain=[-1, 1])),
+                    tooltip=[
+                        "feature_x",
+                        "feature_y",
+                        alt.Tooltip("corr:Q", format=".2f")
+                    ]
+                )
+                .properties(height=420)
+            )
             st.altair_chart(heat, use_container_width=True)
 
         st.markdown('</div>', unsafe_allow_html=True)
