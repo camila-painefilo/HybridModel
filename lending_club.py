@@ -160,8 +160,9 @@ and any binary classification workflow ⚡
     except Exception:
         is_binary = False
 
-    # -------------------- Target mapping UI --------------------
-    st.sidebar.markdown("### Configure binary target mapping")
+    # -------------------- Target mapping UI (center) --------------------
+    st.markdown('<div class="card">', unsafe_allow_html=True)
+    st.markdown("### Configure binary target mapping")
 
     default_bad_labels, default_good_labels = [], []
     if is_binary:
@@ -174,28 +175,28 @@ and any binary classification workflow ⚡
             elif int(val) == 0:
                 default_good_labels.append(lab)
 
-    st.sidebar.caption(
+    st.caption(
         "Select which values should be considered BAD (target=1) and GOOD (target=0). "
         "Values not selected in either group will be ignored in modeling."
     )
 
-    bad_labels = st.sidebar.multiselect(
+    bad_labels = st.multiselect(
         "BAD class values (target = 1):",
         options=sorted(labels),
         default=sorted(default_bad_labels),
         help="Choose values that represent default, churn, bad loans, etc."
     )
 
-    good_labels = st.sidebar.multiselect(
+    good_labels = st.multiselect(
         "GOOD class values (target = 0):",
-        options=sorted(labels),
+        options=sorted(default_good_labels),
         default=sorted(default_good_labels),
         help="Choose values that represent fully paid, retained customers, etc."
     )
 
     conflict = set(bad_labels) & set(good_labels)
     if conflict:
-        st.sidebar.error(f"The following values are assigned to both 1 and 0: {conflict}. Please fix this.")
+        st.error(f"The following values are assigned to both 1 and 0: {conflict}. Please fix this.")
         st.stop()
 
     bad_vals = [label_to_val[l] for l in bad_labels]
@@ -207,16 +208,19 @@ and any binary classification workflow ⚡
     df_full["target"] = pd.to_numeric(df_full["target"], errors="coerce")
 
     if df_full["target"].isna().all():
-        st.sidebar.error("No valid target mapping. Please assign at least one value to 1 or 0.")
+        st.error("No valid target mapping. Please assign at least one value to 1 or 0.")
         st.stop()
     if df_full["target"].nunique() < 2:
-        st.sidebar.error("Target has only one class after mapping. Please assign values to both 1 and 0.")
+        st.error("Target has only one class after mapping. Please assign values to both 1 and 0.")
         st.stop()
 
-    st.sidebar.success(
+    st.success(
         f"Mapped {len(bad_vals)} values to target=1 (BAD) and {len(good_vals)} values to target=0 (GOOD). "
         "Unselected values will be ignored."
     )
+
+    st.markdown('</div>', unsafe_allow_html=True)
+
 
     # 2) Other analysis settings
     with c2:
@@ -267,110 +271,102 @@ and any binary classification workflow ⚡
         if col in df_full and not pd.api.types.is_numeric_dtype(df_full[col]):
             df_full[col] = to_float_pct(df_full[col])
 
-    # -------------------- Sidebar Filters --------------------
-    with st.sidebar:
-        st.subheader("Filters")
-    
-        # 1) Detect possible date-like columns
-        date_candidates = []
-        for c in df_full.columns:
-            # Already datetime dtype
-            if pd.api.types.is_datetime64_any_dtype(df_full[c]):
+     # -------------------- Filters (under Analysis settings) --------------------
+    st.markdown('<div class="card">', unsafe_allow_html=True)
+    st.markdown("### Filters")
+
+    # 1) Detect possible date-like columns
+    date_candidates = []
+    for c in df_full.columns:
+        # Already datetime dtype
+        if pd.api.types.is_datetime64_any_dtype(df_full[c]):
+            date_candidates.append(c)
+        # Strings that look like potential date columns
+        elif df_full[c].dtype == "object":
+            col_lower = c.lower()
+            if any(key in col_lower for key in ["date", "time", "issue", "pymnt", "pay", "earliest", "last"]):
                 date_candidates.append(c)
-            # Strings that look like potential date columns
-            elif df_full[c].dtype == "object":
-                col_lower = c.lower()
-                if any(key in col_lower for key in ["date", "time", "issue", "pymnt", "pay", "earliest", "last"]):
-                    date_candidates.append(c)
-    
-        date_candidates = sorted(set(date_candidates))
-    
-        # 2) Let the user choose a date column manually
-        date_col_choice = None
-        if date_candidates:
-            date_col_choice = st.selectbox(
-                "Select a date column to derive 'issue_year' (optional)",
-                options=["(None)"] + date_candidates,
-                index=0,
-                help="If selected, the system extracts the year and creates an 'issue_year' column."
+
+    date_candidates = sorted(set(date_candidates))
+
+    # 2) Let the user choose a date column manually
+    date_col_choice = None
+    if date_candidates:
+        date_col_choice = st.selectbox(
+            "Select a date column to derive 'issue_year' (optional)",
+            options=["(None)"] + date_candidates,
+            index=0,
+            help="If selected, the system extracts the year and creates an 'issue_year' column."
+        )
+    else:
+        st.caption("No date-like columns detected.")
+
+    # 3) Create issue_year using intelligent multi-format parsing
+    if date_col_choice and date_col_choice != "(None)":
+        raw_col = df_full[date_col_choice].astype(str).str.strip()
+
+        def is_good_parse(parsed):
+            """Check if parsed dates are usable: enough valid & reasonable years."""
+            if parsed.notna().sum() == 0:
+                return False
+            valid_ratio_local = parsed.notna().mean()
+            years = parsed.dt.year.dropna()
+            if years.empty:
+                return False
+            median_year = years.median()
+            return (valid_ratio_local >= 0.3) and (median_year >= 1950)
+
+        # Attempt 1: generic parsing
+        parsed_dates = pd.to_datetime(raw_col, errors="coerce")
+
+        # Attempt 2: Lending Club style "Dec-17"
+        if not is_good_parse(parsed_dates):
+            parsed_dates = pd.to_datetime(raw_col, format="%b-%y", errors="coerce")
+
+        # Attempt 3: "Dec-2017"
+        if not is_good_parse(parsed_dates):
+            parsed_dates = pd.to_datetime(raw_col, format="%b-%Y", errors="coerce")
+
+        # Attempt 4: "16-mar" meaning 2016-Mar (yy-MMM)
+        if not is_good_parse(parsed_dates):
+            parsed_dates = pd.to_datetime(raw_col, format="%y-%b", errors="coerce")
+
+        valid_ratio = parsed_dates.notna().mean()
+
+        if is_good_parse(parsed_dates):
+            df_full["issue_year"] = parsed_dates.dt.year
+        else:
+            st.warning(
+                f"Column '{date_col_choice}' does not appear to be a valid date column "
+                f"({valid_ratio*100:.1f}% valid dates)."
             )
-        else:
-            st.caption("No date-like columns detected.")
-    
-        # 3) Create issue_year using intelligent multi-format parsing
-        if date_col_choice and date_col_choice != "(None)":
-            raw_col = df_full[date_col_choice].astype(str).str.strip()
-    
-            def is_good_parse(parsed):
-                """Check if parsed dates are usable: enough valid & reasonable years."""
-                if parsed.notna().sum() == 0:
-                    return False
-                valid_ratio_local = parsed.notna().mean()
-                years = parsed.dt.year.dropna()
-                if years.empty:
-                    return False
-                # Avoid weird things like year 1900 dominating
-                median_year = years.median()
-                return (valid_ratio_local >= 0.3) and (median_year >= 1950)
-    
-            # Attempt 1: generic parsing
-            parsed_dates = pd.to_datetime(raw_col, errors="coerce")
-    
-            # Attempt 2: Lending Club style "Dec-17"
-            if not is_good_parse(parsed_dates):
-                parsed_dates = pd.to_datetime(raw_col, format="%b-%y", errors="coerce")
-    
-            # Attempt 3: "Dec-2017"
-            if not is_good_parse(parsed_dates):
-                parsed_dates = pd.to_datetime(raw_col, format="%b-%Y", errors="coerce")
-    
-            # Attempt 4: "16-mar" meaning 2016-Mar (yy-MMM)
-            if not is_good_parse(parsed_dates):
-                parsed_dates = pd.to_datetime(raw_col, format="%y-%b", errors="coerce")
-    
-            # Final validation for message
-            valid_ratio = parsed_dates.notna().mean()
-    
-            if is_good_parse(parsed_dates):
-                df_full["issue_year"] = parsed_dates.dt.year
-            else:
-                st.warning(
-                    f"Column '{date_col_choice}' does not appear to be a valid date column "
-                    f"({valid_ratio*100:.1f}% valid dates)."
+
+    # 4) Year filter (only appears if issue_year exists)
+    year_range = None
+    if "issue_year" in df_full.columns and df_full["issue_year"].notna().any():
+        years = pd.to_numeric(df_full["issue_year"], errors="coerce").dropna().astype(int)
+        if not years.empty:
+            min_year, max_year = int(years.min()), int(years.max())
+            if min_year == max_year:
+                st.caption(
+                    f"Only one year detected in the data: {min_year}. Year filter is disabled."
                 )
+                year_range = None
+            else:
+                year_range = st.slider(
+                    "Filter by Issue Year",
+                    min_value=min_year,
+                    max_value=max_year,
+                    value=(min_year, max_year),
+                )
+    else:
+        st.caption("No 'issue_year' detected — line charts will not use year grouping.")
 
-    
-        # 4) Year filter (only appears if issue_year exists)
-        year_range = None
-        if "issue_year" in df_full.columns and df_full["issue_year"].notna().any():
-            years = pd.to_numeric(df_full["issue_year"], errors="coerce").dropna().astype(int)
-            if not years.empty:
-                min_year, max_year = int(years.min()), int(years.max())
-        
-                if min_year == max_year:
-                    # Only one year -> no need for a slider
-                    st.caption(
-                        f"Only one year detected in the data: {min_year}. Year filter is disabled."
-                    )
-                    year_range = None  # no filtering by year
-                else:
-                    # Proper range slider when there is more than one year
-                    year_range = st.slider(
-                        "Filter by Issue Year",
-                        min_value=min_year,
-                        max_value=max_year,
-                        value=(min_year, max_year),
-                    )
-        else:
-            st.caption("No 'issue_year' detected — line charts will not use year grouping.")
+    # 5) Other filters (placeholders)
+    grade_sel = None
+    term_sel = None
 
-
-        
-        # 5) Other filters (disabled – no widgets shown)
-        # We still define the variables so that the rest of the code does not fail.
-        grade_sel = None
-        term_sel = None
-
+    st.markdown('</div>', unsafe_allow_html=True)
 
     # -------------------- Apply Filters --------------------
     df = df_full.copy()
