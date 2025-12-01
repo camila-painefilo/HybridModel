@@ -552,6 +552,20 @@ and any binary classification workflow ⚡
         return X_bal, y_bal
 
     # -------------------- Tabs --------------------
+
+    # 🔹 New: left-side navigation (we will use this instead of tabs later)
+    page = st.sidebar.radio(
+        "Navigation",
+        [
+            "Analysis settings",
+            "Data exploration",
+            "Data visualization",
+            "t-Tests & Stepwise",
+            "Class balancing",
+            "Prediction models"
+        ]
+    )
+    
     tab_data, tab_dist, tab_ttest, tab_balance, tab_pred = st.tabs([
         "🧭 Data Exploration",
         "📈 Data Visualization",
@@ -560,8 +574,8 @@ and any binary classification workflow ⚡
         "🔮 Prediction Models (Hybrid)"
     ])
 
-    # ========== Data Exploration ==========
-    with tab_data:
+     # ========== Data Exploration ==========
+    if page == "Data exploration":
         st.markdown('<div class="card">', unsafe_allow_html=True)
         st.subheader("Data Exploration — quick view")
         st.write("Sample of the dataframe used for visualizations (after filters).")
