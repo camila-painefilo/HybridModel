@@ -132,131 +132,6 @@ and any binary classification workflow ⚡
         msg += f" Removed {removed_rows} completely empty rows and {removed_cols} completely empty columns."
     st.success(msg)
 
-    # -------------------- 2. Analysis settings --------------------
-    st.markdown("## 2. Analysis settings")
-
-    c1, c2, c3 = st.columns([2, 1, 1])
-
-    # 1) Target column
-    with c1:
-        target_col = st.selectbox(
-            "Select target (label) column",
-            options=df_full.columns,
-            help="If the selected column is not binary (0/1), you will be able to map which values correspond to target=1 and target=0."
-        )
-
-    target_raw = df_full[target_col]
-    unique_vals = target_raw.dropna().unique()
-    labels = [str(v) for v in unique_vals]
-    label_to_val = dict(zip(labels, unique_vals))
-
-    # detect already-binary
-    try:
-        numeric_unique = pd.to_numeric(unique_vals, errors="coerce")
-        is_binary = (
-            len(unique_vals) == 2
-            and set(pd.Series(numeric_unique).dropna().astype(int).unique()) <= {0, 1}
-        )
-    except Exception:
-        is_binary = False
-
-    # -------------------- Target mapping UI --------------------
-    st.sidebar.markdown("### Configure binary target mapping")
-
-    default_bad_labels, default_good_labels = [], []
-    if is_binary:
-        numeric_map = dict(zip(labels, numeric_unique))
-        for lab, val in numeric_map.items():
-            if pd.isna(val):
-                continue
-            if int(val) == 1:
-                default_bad_labels.append(lab)
-            elif int(val) == 0:
-                default_good_labels.append(lab)
-
-    st.sidebar.caption(
-        "Select which values should be considered BAD (target=1) and GOOD (target=0). "
-        "Values not selected in either group will be ignored in modeling."
-    )
-
-    bad_labels = st.sidebar.multiselect(
-        "BAD class values (target = 1):",
-        options=sorted(labels),
-        default=sorted(default_bad_labels),
-        help="Choose values that represent default, churn, bad loans, etc."
-    )
-
-    good_labels = st.sidebar.multiselect(
-        "GOOD class values (target = 0):",
-        options=sorted(labels),
-        default=sorted(default_good_labels),
-        help="Choose values that represent fully paid, retained customers, etc."
-    )
-
-    conflict = set(bad_labels) & set(good_labels)
-    if conflict:
-        st.sidebar.error(f"The following values are assigned to both 1 and 0: {conflict}. Please fix this.")
-        st.stop()
-
-    bad_vals = [label_to_val[l] for l in bad_labels]
-    good_vals = [label_to_val[l] for l in good_labels]
-
-    df_full["target"] = pd.NA
-    df_full.loc[target_raw.isin(bad_vals), "target"] = 1
-    df_full.loc[target_raw.isin(good_vals), "target"] = 0
-    df_full["target"] = pd.to_numeric(df_full["target"], errors="coerce")
-
-    if df_full["target"].isna().all():
-        st.sidebar.error("No valid target mapping. Please assign at least one value to 1 or 0.")
-        st.stop()
-    if df_full["target"].nunique() < 2:
-        st.sidebar.error("Target has only one class after mapping. Please assign values to both 1 and 0.")
-        st.stop()
-
-    st.sidebar.success(
-        f"Mapped {len(bad_vals)} values to target=1 (BAD) and {len(good_vals)} values to target=0 (GOOD). "
-        "Unselected values will be ignored."
-    )
-
-    # 2) Other analysis settings
-    with c2:
-        test_size = st.slider(
-            "Test data ratio",
-            min_value=0.10,
-            max_value=0.50,
-            value=0.30,
-            step=0.05,
-            help="Proportion of data reserved for testing."
-        )
-
-    with c3:
-        random_state = st.number_input(
-            "Random state",
-            min_value=0,
-            max_value=10_000,
-            value=42,
-            step=1,
-            help="Controls the randomness in model evaluation."
-        )
-
-    missing_strategy = st.radio(
-        "Missing value handling (for model training)",
-        options=["Impute with mean", "Impute with 0", "Drop rows with missing values"],
-        index=0,
-        horizontal=True
-    )
-
-    max_missing_pct = st.slider(
-        "Maximum allowed missing rate per column (%)",
-        min_value=0,
-        max_value=100,
-        value=50,
-        step=5,
-        help="Columns with a higher percentage of missing values will be excluded from modeling.",
-    )
-
-    st.write("")
-
     # -------------------- Light typing/cleanup --------------------
     def to_float_pct(series: pd.Series) -> pd.Series:
         s = series.astype(str).str.replace("%", "", regex=False).str.replace(",", "", regex=False).str.strip()
@@ -574,6 +449,79 @@ and any binary classification workflow ⚡
         "🔮 Prediction Models (Hybrid)"
     ])
 
+    # ========== Analysis Settings ==========
+    if page == "Analysis settings":
+        st.markdown("## Analysis Settings")
+        st.write("Configure your target variable, binary mapping, date column, and other preprocessing choices before moving to the next steps.")
+        st.markdown("---")
+
+        # 🔽 BLOQUE MOVIDO AQUÍ 🔽
+
+        c1, c2, c3 = st.columns([2, 1, 1])
+
+        # 1) Target column
+        with c1:
+            target_col = st.selectbox(
+                "Select target (label) column",
+                options=df_full.columns,
+                help="If the selected column is not binary (0/1), you will be able to map which values correspond to target=1 and target=0."
+            )
+
+        target_raw = df_full[target_col]
+        unique_vals = target_raw.dropna().unique()
+        labels = [str(v) for v in unique_vals]
+        label_to_val = dict(zip(labels, unique_vals))
+
+        # detect already-binary
+        try:
+            numeric_unique = pd.to_numeric(unique_vals, errors="coerce")
+            is_binary = (
+                len(unique_vals) == 2
+                and set(pd.Series(numeric_unique).dropna().astype(int).unique()) <= {0, 1}
+            )
+        except Exception:
+            is_binary = False
+
+        # 2) Other analysis settings
+        with c2:
+            test_size = st.slider(
+                "Test data ratio",
+                min_value=0.10,
+                max_value=0.50,
+                value=0.30,
+                step=0.05,
+                help="Proportion of data reserved for testing."
+            )
+
+        with c3:
+            random_state = st.number_input(
+                "Random state",
+                min_value=0,
+                max_value=10_000,
+                value=42,
+                step=1,
+                help="Controls the randomness in model evaluation."
+            )
+
+        missing_strategy = st.radio(
+            "Missing value handling (for model training)",
+            options=["Impute with mean", "Impute with 0", "Drop rows with missing values"],
+            index=0,
+            horizontal=True
+        )
+
+        max_missing_pct = st.slider(
+            "Maximum allowed missing rate per column (%)",
+            min_value=0,
+            max_value=100,
+            value=50,
+            step=5,
+            help="Columns with a higher percentage of missing values will be excluded from modeling.",
+        )
+
+        st.write("")
+
+
      # ========== Data Exploration ==========
     if page == "Data exploration":
         st.markdown('<div class="card">', unsafe_allow_html=True)
@@ -635,7 +583,7 @@ and any binary classification workflow ⚡
         st.markdown('</div>', unsafe_allow_html=True)
 
     # ========== Distributions ==========
-    with tab_dist:
+    if page == "Data visualization":
         st.markdown('<div class="card">', unsafe_allow_html=True)
         st.subheader("Distributions — Histograms, Boxplots & Line")
         st.caption("🎯 Target legend: 0 = good, 1 = bad")
