@@ -549,7 +549,33 @@ and any binary classification workflow ⚡
 
     # -------------------- Navigation sidebar --------------------
     with st.sidebar:
-        st.markdown("### 🧭 Navigation")
+    
+        # ----- MORE AESTHETIC -----
+        st.markdown("""
+        <style>
+        /* Título */
+        .sidebar-title {
+            font-size: 1.4rem !important; 
+            font-weight: 700 !important;
+        }
+    
+        /* Radio opciones más grandes */
+        div[role="radiogroup"] > label {
+            font-size: 1.1rem !important;
+            padding-top: 6px;
+            padding-bottom: 6px;
+            border-bottom: 1px solid rgba(0,0,0,0.12);
+        }
+    
+        /* Sin borde en el último */
+        div[role="radiogroup"] > label:last-child {
+            border-bottom: none;
+        }
+        </style>
+        """, unsafe_allow_html=True)
+    
+        # ----- CONTENIDO -----
+        st.markdown('<div class="sidebar-title">🧭 Navigation</div>', unsafe_allow_html=True)
     
         page = st.radio(
             "Go to section",
@@ -562,6 +588,7 @@ and any binary classification workflow ⚡
             ],
             index=0,
         )
+
 
 
     # ========== Data Exploration ==========
