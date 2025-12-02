@@ -547,6 +547,22 @@ and any binary classification workflow ⚡
         X_bal = df_bal.drop(columns=["__target__"])
         return X_bal, y_bal
 
+    # -------------------- Navigation sidebar --------------------
+    with st.sidebar:
+        st.markdown("### 🧭 Navigation")
+    
+        page = st.radio(
+            "Go to section",
+            [
+                "🧭 Data Exploration",
+                "📈 Data Visualization",
+                "📏 t-Tests & Stepwise",
+                "⚖️ Class Balancing",
+                "🔮 Prediction Models (Hybrid)",
+            ],
+            index=0,
+        )
+
     # -------------------- Tabs --------------------
     tab_data, tab_dist, tab_ttest, tab_balance, tab_pred = st.tabs([
         "🧭 Data Exploration",
