@@ -689,7 +689,7 @@ and any binary classification workflow ⚡
     # ========== Distributions ==========
     elif page == "📈 Data Visualization":
         st.markdown('<div class="card">', unsafe_allow_html=True)
-        st.subheader("Distributions — Histograms, Boxplots & Line")
+        st.subheader("📈 Data Visualization — Histograms, Boxplots & Line")
         st.caption("🎯 Target legend: 0 = good, 1 = bad")
 
         if not EDA_VARS:
