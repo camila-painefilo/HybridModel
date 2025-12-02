@@ -425,7 +425,7 @@ and any binary classification workflow ⚡
           🎯 <b>Target column:</b> <code>{target_col}</code><br><br>
           This dashboard uses a binary target where <b>1 = bad outcome (event)</b> and 
           <b>0 = good outcome (non-event)</b>.<br>
-          You can configure which raw values map to 0 or 1 in the sidebar; 
+          You can configure which raw values map to 0 or 1 in the analysis settings; 
           any values not assigned to either class will be <b>ignored</b>.
         </div>
         """,
@@ -573,7 +573,7 @@ and any binary classification workflow ⚡
     ])
 
     # ========== Data Exploration ==========
-    with tab_data:
+    if page == "🧭 Data Exploration":
         st.markdown('<div class="card">', unsafe_allow_html=True)
         st.subheader("Data Exploration — quick view")
         st.write("Sample of the dataframe used for visualizations (after filters).")
@@ -633,7 +633,7 @@ and any binary classification workflow ⚡
         st.markdown('</div>', unsafe_allow_html=True)
 
     # ========== Distributions ==========
-    with tab_dist:
+    elif page == "📈 Data Visualization":
         st.markdown('<div class="card">', unsafe_allow_html=True)
         st.subheader("Distributions — Histograms, Boxplots & Line")
         st.caption("🎯 Target legend: 0 = good, 1 = bad")
@@ -656,9 +656,9 @@ and any binary classification workflow ⚡
 
             # Line chart
             if show_line:
-                # We require a date column selected in the sidebar
+                # We require a date column selected in the analysis settings
                 if not (date_col_choice and date_col_choice != "(None)" and date_col_choice in df.columns):
-                    st.info("Please select a valid date column in the sidebar to enable the line chart.")
+                    st.info("Please select a valid date column in the analysis settings to enable the line chart.")
                 else:
                     y_var = st.selectbox(
                         "Y variable",
@@ -874,7 +874,7 @@ and any binary classification workflow ⚡
         st.markdown('</div>', unsafe_allow_html=True)
 
     # ========== T-tests & Stepwise ==========
-    with tab_ttest:
+    elif page == "📏 t-Tests & Stepwise":
         st.markdown('<div class="card">', unsafe_allow_html=True)
         st.subheader("F-test + t-tests (student method: p < 0.05)")
 
@@ -1073,7 +1073,7 @@ and any binary classification workflow ⚡
         st.markdown('</div>', unsafe_allow_html=True)
 
     # ========== Class Balancing ==========
-    with tab_balance:
+    elif page == "⚖️ Class Balancing":
         st.markdown('<div class="card">', unsafe_allow_html=True)
         st.subheader("⚖️ Class Balancing for Modeling")
 
@@ -1144,10 +1144,10 @@ and any binary classification workflow ⚡
         st.markdown('</div>', unsafe_allow_html=True)
 
     # ========== Prediction Models ==========
-    with tab_pred:
+    elif page == "🔮 Prediction Models (Hybrid)":
         st.markdown('<div class="card">', unsafe_allow_html=True)
         st.subheader("Prediction Models — Logistic Regression, Decision Tree & Hybrid")
-        st.caption("Target legend — 0: good outcome, 1: bad outcome (as defined in the sidebar mapping).")
+        st.caption("Target legend — 0: good outcome, 1: bad outcome (as defined in the analysis settings).")
 
         if "target" not in df.columns:
             st.info("No 'target' column found.")
