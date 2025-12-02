@@ -553,29 +553,64 @@ and any binary classification workflow ⚡
         # ----- MORE AESTHETIC -----
         st.markdown("""
         <style>
-        /* Título */
+        
+        /* ---- Color palette: Pastel Blue ---- */
+        :root {
+            --card-bg: rgba(173, 216, 230, 0.35);   /* light pastel blue */
+            --card-bg-hover: rgba(173, 216, 230, 0.50);
+            --card-border: rgba(70, 130, 180, 0.45); /* steel blue */
+            --card-selected: rgba(70, 130, 180, 0.20);
+            --card-selected-border: rgba(70, 130, 180, 0.70);
+        }
+        
+        /* ----- Title style ----- */
         .sidebar-title {
-            font-size: 1.4rem !important; 
+            font-size: 1.5rem !important;
             font-weight: 700 !important;
+            margin-bottom: 10px !important;
         }
-    
-        /* Radio opciones más grandes */
+        
+        /* ----- Subtitle ----- */
+        .sidebar-subtitle {
+            font-size: 1.15rem !important;
+            font-weight: 500 !important;
+            opacity: 0.9 !important;
+            margin-bottom: 8px !important;
+        }
+        
+        /* ----- Buttons / Cards ----- */
         div[role="radiogroup"] > label {
-            font-size: 1.1rem !important;
-            padding-top: 6px;
-            padding-bottom: 6px;
-            border-bottom: 1px solid rgba(0,0,0,0.12);
+            background: var(--card-bg);
+            padding: 12px 15px !important;
+            margin-bottom: 10px !important;
+            border: 1px solid var(--card-border);
+            border-radius: 12px;
+            font-size: 1.15rem !important;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            width: 100%;
+            transition: 0.15s ease;
         }
-    
-        /* Sin borde en el último */
-        div[role="radiogroup"] > label:last-child {
-            border-bottom: none;
+        
+        /* Hover */
+        div[role="radiogroup"] > label:hover {
+            background: var(--card-bg-hover);
+            cursor: pointer;
         }
+        
+        /* Selected option */
+        div[aria-checked="true"] {
+            background: var(--card-selected) !important;
+            border-color: var(--card-selected-border) !important;
+        }
+        
         </style>
         """, unsafe_allow_html=True)
-    
+        
+            
         # ----- CONTENIDO -----
-        st.markdown('<div class="sidebar-title">🧭 Navigation</div>', unsafe_allow_html=True)
+        st.markdown('<div class="sidebar-title">🧭 Navigation Menu</div>', unsafe_allow_html=True)
     
         page = st.radio(
             "Go to section",
