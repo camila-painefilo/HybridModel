@@ -556,11 +556,11 @@ and any binary classification workflow ⚡
         
         /* ---- Color palette: Pastel Blue ---- */
         :root {
-            --card-bg: rgba(173, 216, 230, 0.35);   /* light pastel blue */
-            --card-bg-hover: rgba(173, 216, 230, 0.50);
-            --card-border: rgba(70, 130, 180, 0.45); /* steel blue */
-            --card-selected: rgba(70, 130, 180, 0.20);
-            --card-selected-border: rgba(70, 130, 180, 0.70);
+            --card-bg: rgba(0,0,0,0.04);
+            --card-bg-hover: rgba(0,0,0,0.08);
+            --card-border: rgba(0,0,0,0.15);
+            --card-selected: rgba(0,0,0,0.12);
+            --card-selected-border: rgba(0,0,0,0.35);
         }
         
         /* ----- Title style ----- */
