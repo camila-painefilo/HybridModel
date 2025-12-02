@@ -563,14 +563,6 @@ and any binary classification workflow ⚡
             index=0,
         )
 
-    # -------------------- Tabs --------------------
-    tab_data, tab_dist, tab_ttest, tab_balance, tab_pred = st.tabs([
-        "🧭 Data Exploration",
-        "📈 Data Visualization",
-        "📏 t-Tests & Stepwise",
-        "⚖️ Class Balancing",
-        "🔮 Prediction Models (Hybrid)"
-    ])
 
     # ========== Data Exploration ==========
     if page == "🧭 Data Exploration":
