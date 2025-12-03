@@ -970,7 +970,7 @@ and any binary classification workflow ⚡
 
         st.markdown('</div>', unsafe_allow_html=True)
 
-      # ========== T-tests & Stepwise ==========
+         # ========== T-tests & Stepwise ==========
     elif page == "📏 t-Tests & Stepwise":
         st.markdown('<div class="card">', unsafe_allow_html=True)
 
@@ -1013,7 +1013,7 @@ and any binary classification workflow ⚡
                 d_for_tests = d_model_sw.copy()
                 st.caption("Using original (unbalanced) dataset for t-tests & stepwise.")
 
-            # 3) t-tests sobre el dataset balanceado
+            # 3) t-tests sobre el dataset (posiblemente balanceado)
             tnum = d_for_tests["target"].astype(int)
             mask_valid = tnum.isin([0, 1])
             if mask_valid.sum() < 2 or tnum[mask_valid].nunique() < 2:
@@ -1029,7 +1029,6 @@ and any binary classification workflow ⚡
                     st.info("No numeric variables available for t-tests.")
                 else:
                     rows_t = []
-                    selected_features = []  # p < 0.05
 
                     for col in VARS:
                         s = pd.to_numeric(d_for_tests[col], errors="coerce")
@@ -1061,10 +1060,6 @@ and any binary classification workflow ⚡
                             used_t = t_uneq
                             used_p = p_uneq
 
-                        is_sig = used_p < 0.05
-                        if is_sig:
-                            selected_features.append(col)
-
                         rows_t.append({
                             "variable": col,
                             "n_0": len(g0),
@@ -1082,7 +1077,6 @@ and any binary classification workflow ⚡
                             "used_test": used_test,
                             "used_t": used_t,
                             "used_p_value": used_p,
-                            "selected(p<0.05)": is_sig,
                         })
 
                     if not rows_t:
@@ -1090,17 +1084,15 @@ and any binary classification workflow ⚡
                     else:
                         res = pd.DataFrame(rows_t)
 
-                        # 🔹 Ordenar por p-value usado (más significativas arriba)
+                        # Ordenar por p-value usado (más significativas arriba)
                         res_sorted = res.sort_values("used_p_value").reset_index(drop=True)
 
-                        # 🔹 MISMA asignación v1, v2, ... que en Data Exploration
-                        #    (basada en df.columns en el mismo orden)
+                        # IDs consistentes con Data Exploration: v1, v2, ...
                         var_ids = {col: f"v{i+1}" for i, col in enumerate(df.columns)}
 
-                        # 🔹 Tabla “bonita” para mostrar
+                        # Tabla resumida que se muestra
                         df_display = res_sorted[["variable", "used_t", "used_p_value"]].copy()
                         df_display.insert(0, "variable_id", df_display["variable"].map(var_ids))
-
                         df_display.rename(
                             columns={
                                 "variable": "variable_name",
@@ -1110,7 +1102,7 @@ and any binary classification workflow ⚡
                             inplace=True,
                         )
 
-                        # Guardamos p_value numérico para comparaciones
+                        # p_value numérico crudo
                         p_raw = df_display["p_value"].astype(float)
 
                         # Columnas de alphas con x / xx / xxx
@@ -1118,7 +1110,7 @@ and any binary classification workflow ⚡
                         df_display["alpha_0.05"] = np.where(p_raw < 0.05, "xx", "")
                         df_display["alpha_0.01"] = np.where(p_raw < 0.01, "xxx", "")
 
-                        # Formato p-value con 3 decimales
+                        # Mostrar p_value con 3 decimales
                         df_display["p_value"] = p_raw.round(3)
 
                         st.dataframe(df_display, use_container_width=True)
@@ -1127,13 +1119,14 @@ and any binary classification workflow ⚡
                             "x / xx / xxx indicate significance at α = 0.10 / 0.05 / 0.01 respectively."
                         )
 
-                        # Guardar features significativas para stepwise
+                        # Definir selected_features SOLO desde la tabla (p < 0.05)
+                        mask_005 = p_raw < 0.05
+                        selected_features = df_display.loc[mask_005, "variable_name"].tolist()
                         st.session_state["ttest_sig_features"] = selected_features
 
-                        if selected_features:
-                            st.success(
-                                f"{len(selected_features)} variables selected by t-tests (p < 0.05)."
-                            )
+                        num_sig = mask_005.sum()
+                        if num_sig > 0:
+                            st.success(f"{num_sig} variables selected by t-tests (p < 0.05).")
                             st.caption(", ".join(selected_features))
                         else:
                             st.warning(
@@ -1144,7 +1137,7 @@ and any binary classification workflow ⚡
                         st.markdown("---")
                         st.subheader("Forward stepwise logistic regression (based on t-test results)")
 
-                        # 4) Stepwise usando el mismo dataset balanceado
+                        # 4) Stepwise usando el mismo dataset (posiblemente balanceado)
                         if d_for_tests.empty:
                             st.info("Not enough numeric features or valid 0/1 target to run stepwise selection.")
                         else:
@@ -1232,6 +1225,7 @@ and any binary classification workflow ⚡
                                         st.caption("✅ Final feature set saved for the Prediction Models tab.")
 
         st.markdown('</div>', unsafe_allow_html=True)
+
 
     # ========== Class Balancing ==========
     elif page == "⚖️ Class Balancing":
