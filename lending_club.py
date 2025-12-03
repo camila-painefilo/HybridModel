@@ -970,7 +970,7 @@ and any binary classification workflow ⚡
 
         st.markdown('</div>', unsafe_allow_html=True)
 
-        # ========== T-tests & Stepwise ==========
+      # ========== T-tests & Stepwise ==========
     elif page == "📏 t-Tests & Stepwise":
         st.markdown('<div class="card">', unsafe_allow_html=True)
 
@@ -1090,24 +1090,40 @@ and any binary classification workflow ⚡
                     else:
                         res = pd.DataFrame(rows_t)
 
-                        # Ordenar por p-value usado (más significativas arriba)
+                        # 🔹 Ordenar por p-value usado (más significativas arriba)
                         res_sorted = res.sort_values("used_p_value").reset_index(drop=True)
 
-                        # ID v1, v2, v3, ...
-                        res_sorted["variable_id"] = [f"v{i+1}" for i in range(len(res_sorted))]
+                        # 🔹 MISMA asignación v1, v2, ... que en Data Exploration
+                        #    (basada en df.columns en el mismo orden)
+                        var_ids = {col: f"v{i+1}" for i, col in enumerate(df.columns)}
 
-                        # Tabla resumida que quieres mostrar
-                        df_display = res_sorted[["variable_id", "variable", "used_t", "used_p_value"]].copy()
-                        df_display.columns = ["variable_id", "variable_name", "t_value", "p_value"]
+                        # 🔹 Tabla “bonita” para mostrar
+                        df_display = res_sorted[["variable", "used_t", "used_p_value"]].copy()
+                        df_display.insert(0, "variable_id", df_display["variable"].map(var_ids))
+
+                        df_display.rename(
+                            columns={
+                                "variable": "variable_name",
+                                "used_t": "t_value",
+                                "used_p_value": "p_value",
+                            },
+                            inplace=True,
+                        )
+
+                        # Guardamos p_value numérico para comparaciones
+                        p_raw = df_display["p_value"].astype(float)
 
                         # Columnas de alphas con x / xx / xxx
-                        df_display["alpha_0.10"] = np.where(df_display["p_value"] < 0.10, "x", "")
-                        df_display["alpha_0.05"] = np.where(df_display["p_value"] < 0.05, "xx", "")
-                        df_display["alpha_0.01"] = np.where(df_display["p_value"] < 0.01, "xxx", "")
+                        df_display["alpha_0.10"] = np.where(p_raw < 0.10, "x", "")
+                        df_display["alpha_0.05"] = np.where(p_raw < 0.05, "xx", "")
+                        df_display["alpha_0.01"] = np.where(p_raw < 0.01, "xxx", "")
+
+                        # Formato p-value con 3 decimales
+                        df_display["p_value"] = p_raw.round(3)
 
                         st.dataframe(df_display, use_container_width=True)
                         st.caption(
-                            "Variables are ordered by p-value (smallest first). "
+                            "Variable IDs (v1, v2, ...) match the Data Exploration tab. "
                             "x / xx / xxx indicate significance at α = 0.10 / 0.05 / 0.01 respectively."
                         )
 
@@ -1216,8 +1232,6 @@ and any binary classification workflow ⚡
                                         st.caption("✅ Final feature set saved for the Prediction Models tab.")
 
         st.markdown('</div>', unsafe_allow_html=True)
-
-
 
     # ========== Class Balancing ==========
     elif page == "⚖️ Class Balancing":
