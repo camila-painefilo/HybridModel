@@ -129,7 +129,7 @@ and any binary classification workflow ⚡
 
     msg = "Data upload completed."
     if removed_rows > 0 or removed_cols > 0:
-        msg += f" Removed {removed_rows} completely empty rows and {removed_cols} completely empty columns."
+        msg += f" Removed {removed_rows} completely empty rows and {removed_cols} completely empty variable."
     st.success(msg)
 
     # -------------------- 2. Analysis settings --------------------
@@ -251,7 +251,7 @@ and any binary classification workflow ⚡
     )
 
     max_missing_pct = st.slider(
-        "Maximum allowed missing rate per column (%)",
+        "Maximum allowed missing rate per variable (%)",
         min_value=0,
         max_value=100,
         value=50,
@@ -641,7 +641,7 @@ and any binary classification workflow ⚡
         with c1_:
             st.metric("Rows (sampled)", f"{rows_s:,}")
         with c2_:
-            st.metric("Columns", f"{cols_s}")
+            st.metric("Variables", f"{cols_s}")
         with c3_:
             st.metric("Avg missing (sample)", f"{avg_missing:.2f}%")
 
@@ -649,7 +649,7 @@ and any binary classification workflow ⚡
         var_ids = {col: f"v{i+1}" for i, col in enumerate(df.columns)}
 
         # ---------- Column data types ----------
-        st.markdown("#### Column data types")
+        st.markdown("#### Variable data types")
         dtypes_df = (
             df.dtypes.reset_index().rename(columns={"index": "column", 0: "dtype"})
         )
@@ -664,7 +664,7 @@ and any binary classification workflow ⚡
             st.dataframe(dtypes_df, use_container_width=True)
 
         # ---------- Missing values per column ----------
-        st.markdown("#### Missing values per column")
+        st.markdown("#### Missing values per Variable")
         missing_count = df.isna().sum()
         missing_pct_col = df.isna().mean() * 100
 
@@ -703,7 +703,7 @@ and any binary classification workflow ⚡
 
             # añadir v y column
             desc_num.insert(0, "v", desc_num.index.map(var_ids))
-            desc_num.insert(1, "column", desc_num.index)
+            desc_num.insert(1, "Variable name", desc_num.index)
             desc_num = desc_num.reset_index(drop=True)
 
             try:
@@ -718,7 +718,7 @@ and any binary classification workflow ⚡
             desc_cat = cat_sample.describe().T
 
             desc_cat.insert(0, "v", desc_cat.index.map(var_ids))
-            desc_cat.insert(1, "column", desc_cat.index)
+            desc_cat.insert(1, "Variable name", desc_cat.index)
             desc_cat = desc_cat.reset_index(drop=True)
 
             try:
@@ -736,7 +736,7 @@ and any binary classification workflow ⚡
         st.caption("🎯 Target legend: 0 = good, 1 = bad")
 
         if not EDA_VARS:
-            st.info("No suitable numeric columns from the requested list.")
+            st.info("No suitable numeric variables from the requested list.")
         else:
             c1_, c2_, c3_, c4_ = st.columns([1, 1, 1, 2])
             with c1_:
@@ -755,7 +755,7 @@ and any binary classification workflow ⚡
             if show_line:
                 # We require a date column selected in the analysis settings
                 if not (date_col_choice and date_col_choice != "(None)" and date_col_choice in df.columns):
-                    st.info("Please select a valid date column in the analysis settings to enable the line chart.")
+                    st.info("Please select a valid date variable in the analysis settings to enable the line chart.")
                 else:
                     y_var = st.selectbox(
                         "Y variable",
