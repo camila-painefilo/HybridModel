@@ -674,7 +674,7 @@ and any binary classification workflow ⚡
             "missing_pct (%)": missing_pct_col.values,
         })
         missing_df["missing_pct (%)"] = missing_df["missing_pct (%)"].round(2)
-        missing_df.insert(0, "v", missing_df["column"].map(var_ids))
+        missing_df.insert(0, "v", missing_df["Variable Name"].map(var_ids))
         missing_df = missing_df.sort_values("missing_count", ascending=False)
         missing_df = missing_df.reset_index(drop=True)
 
