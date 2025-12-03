@@ -626,18 +626,18 @@ and any binary classification workflow ⚡
 
 
 
-    # ========== Data Exploration ==========
+       # ========== Data Exploration ==========
     if page == "🧭 Data Exploration":
         st.markdown('<div class="card">', unsafe_allow_html=True)
         st.subheader("Data Exploration — quick view")
         st.write("Sample of the dataframe used for visualizations (after filters).")
-
+    
         SAMPLE_N = 10000
         sample = df if len(df) <= SAMPLE_N else df.sample(SAMPLE_N, random_state=42)
-
+    
         rows_s, cols_s = sample.shape
         avg_missing = sample.isna().mean().mean() * 100
-
+    
         c1_, c2_, c3_ = st.columns(3)
         with c1_:
             st.metric("Rows (sampled)", f"{rows_s:,}")
@@ -645,73 +645,71 @@ and any binary classification workflow ⚡
             st.metric("Columns", f"{cols_s}")
         with c3_:
             st.metric("Avg missing (sample)", f"{avg_missing:.2f}%")
-
-        # IDs de variables: v1, v2, v3... (basados en el orden de df.columns)
+    
+        # IDs de variables v1, v2, v3...
         var_ids = {col: f"v{i+1}" for i, col in enumerate(df.columns)}
-
+    
         # ---------- Column data types ----------
         st.markdown("#### Column data types")
         dtypes_df = (
-            df.dtypes.reset_index().rename(columns={"index": "column", 0: "dtype"})
+            df.dtypes.reset_index()
+            .rename(columns={"index": "column", 0: "dtype"})
         )
         dtypes_df["dtype"] = dtypes_df["dtype"].astype(str)
-
-        # Añadir columna v (v1, v2, v3...)
         dtypes_df.insert(0, "v", dtypes_df["column"].map(var_ids))
-
-        # Estilo pequeño para la columna v
+    
         dtypes_style = dtypes_df.style.set_properties(
             subset=["v"],
             **{"font-size": "0.8rem", "color": "#6b7280"}
-        )
+        ).hide(axis="index")
+    
         st.dataframe(dtypes_style, use_container_width=True)
-
-        # ---------- Missing values per column ----------
+    
+        # ---------- Missing values ----------
         st.markdown("#### Missing values per column")
-        missing_count = df.isna().sum()
-        missing_pct_col = df.isna().mean() * 100
-
         missing_df = pd.DataFrame({
             "column": df.columns,
-            "missing_count": missing_count.values,
-            "missing_pct (%)": missing_pct_col.values,
-        }).sort_values("missing_count", ascending=False)
-        missing_df["missing_pct (%)"] = missing_df["missing_pct (%)"].round(2)
-
-        # Añadir columna v usando el mismo diccionario
+            "missing_count": df.isna().sum().values,
+            "missing_pct (%)": (df.isna().mean().values * 100).round(2)
+        })
         missing_df.insert(0, "v", missing_df["column"].map(var_ids))
-
+        missing_df = missing_df.sort_values("missing_count", ascending=False)
+    
         missing_style = missing_df.style.set_properties(
             subset=["v"],
             **{"font-size": "0.8rem", "color": "#6b7280"}
-        )
+        ).hide(axis="index")
+    
         st.dataframe(missing_style, use_container_width=True)
-
+    
         # ---------- Head ----------
         st.markdown("#### Head (first non-empty rows)")
         head_df = sample.dropna(how="all").head(10)
-        st.dataframe(head_df, use_container_width=True)
-
+        st.dataframe(head_df.reset_index(drop=True), use_container_width=True)
+    
         # ---------- Statistical summary (`describe`) ----------
         st.markdown("#### Statistical summary (`describe`)")
-
+    
         # Numeric summary
         num_sample = sample.select_dtypes(include=["number"])
         if not num_sample.empty:
             st.markdown("##### Numeric summary")
             desc_num = num_sample.describe().T
-            desc_num = desc_num.round(3)
+            desc_num.insert(0, "v", desc_num.index.map(var_ids))
+            desc_num = desc_num.reset_index().rename(columns={"index": "column"})
             st.dataframe(desc_num, use_container_width=True)
-
+    
         # Categorical summary
         cat_sample = sample.select_dtypes(exclude=["number"])
         if not cat_sample.empty:
             st.markdown("##### Categorical summary")
             desc_cat = cat_sample.describe().T
+            desc_cat.insert(0, "v", desc_cat.index.map(var_ids))
+            desc_cat = desc_cat.reset_index().rename(columns={"index": "column"})
             st.dataframe(desc_cat, use_container_width=True)
-
+    
         st.markdown('</div>', unsafe_allow_html=True)
-
+    
 
     # ========== Distributions ==========
     elif page == "📈 Data Visualization":
