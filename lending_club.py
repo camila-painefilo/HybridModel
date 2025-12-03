@@ -651,10 +651,10 @@ and any binary classification workflow ⚡
         # ---------- Column data types ----------
         st.markdown("#### Variable data types")
         dtypes_df = (
-            df.dtypes.reset_index().rename(columns={"index": "column", 0: "dtype"})
+            df.dtypes.reset_index().rename(columns={"index": "Variable name", 0: "dtype"})
         )
         dtypes_df["dtype"] = dtypes_df["dtype"].astype(str)
-        dtypes_df.insert(0, "v", dtypes_df["column"].map(var_ids))
+        dtypes_df.insert(0, "v", dtypes_df["Variable Name"].map(var_ids))
         dtypes_df = dtypes_df.reset_index(drop=True)
 
         try:
