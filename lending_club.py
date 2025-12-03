@@ -970,22 +970,25 @@ and any binary classification workflow ⚡
 
         st.markdown('</div>', unsafe_allow_html=True)
 
-    # ========== T-tests & Stepwise ==========
+        # ========== T-tests & Stepwise ==========
     elif page == "📏 t-Tests & Stepwise":
         st.markdown('<div class="card">', unsafe_allow_html=True)
-        st.subheader("F-test + t-tests (student method: p < 0.05)")
+
+        # Título y descripción del panel
+        st.markdown("### 📏 t-Tests & Stepwise")
+        st.caption("F-test + t-tests (student method) and forward stepwise logistic regression.")
 
         if "target" not in df.columns:
             st.info("No 'target' column found.")
         else:
-            # 1) Construir matriz de modelado base (misma que para los modelos)
+            # 1) Matriz de modelado base (igual que para modelos)
             d_model_sw = build_model_matrix(df)
             if d_model_sw.empty:
                 st.info("Not enough numeric features or valid 0/1 target to run t-tests / stepwise.")
                 st.markdown('</div>', unsafe_allow_html=True)
                 st.stop()
 
-            # 2) Aplicar método de class balancing elegido en el tab ⚖️
+            # 2) Aplicar método de class balancing elegido en ⚖️
             balance_method = st.session_state.get("balance_method", "None")
 
             X_base = d_model_sw.drop(columns=["target"])
@@ -1010,13 +1013,13 @@ and any binary classification workflow ⚡
                 d_for_tests = d_model_sw.copy()
                 st.caption("Using original (unbalanced) dataset for t-tests & stepwise.")
 
-            # 3) t-tests usando el dataset balanceado d_for_tests
+            # 3) t-tests sobre el dataset balanceado
             tnum = d_for_tests["target"].astype(int)
             mask_valid = tnum.isin([0, 1])
             if mask_valid.sum() < 2 or tnum[mask_valid].nunique() < 2:
                 st.info("Both target groups (0 and 1) must be present to run t-tests.")
             else:
-                # 🎯 Use ALL numeric predictors (except target)
+                # Todas las variables numéricas excepto target
                 VARS = [
                     c for c in d_for_tests.columns
                     if c != "target" and pd.api.types.is_numeric_dtype(d_for_tests[c])
@@ -1026,7 +1029,7 @@ and any binary classification workflow ⚡
                     st.info("No numeric variables available for t-tests.")
                 else:
                     rows_t = []
-                    selected_features = []  # variables finally chosen by t-test (p < 0.05)
+                    selected_features = []  # p < 0.05
 
                     for col in VARS:
                         s = pd.to_numeric(d_for_tests[col], errors="coerce")
@@ -1041,14 +1044,14 @@ and any binary classification workflow ⚡
                         m0, m1 = np.mean(g0), np.mean(g1)
                         s0, s1 = np.std(g0, ddof=1), np.std(g1, ddof=1)
 
-                        # 1️⃣ F-test for equality of variances (Levene)
+                        # F-test (Levene) para igualdad de varianzas
                         f_stat, f_p = stats.levene(g0, g1)
 
-                        # 2️⃣ t-tests (both versions)
+                        # t-tests con y sin varianzas iguales
                         t_eq, p_eq = stats.ttest_ind(g1, g0, equal_var=True)
                         t_uneq, p_uneq = stats.ttest_ind(g1, g0, equal_var=False)
 
-                        # 3️⃣ choose which t-test to use based on F-test
+                        # Elegir el t-test según F-test
                         if f_p >= 0.05:
                             used_test = "equal_var"
                             used_t = t_eq
@@ -1077,6 +1080,7 @@ and any binary classification workflow ⚡
                             "t_unequal": t_uneq,
                             "t_unequal_p": p_uneq,
                             "used_test": used_test,
+                            "used_t": used_t,
                             "used_p_value": used_p,
                             "selected(p<0.05)": is_sig,
                         })
@@ -1085,13 +1089,29 @@ and any binary classification workflow ⚡
                         st.info("No valid data to compute t-tests.")
                     else:
                         res = pd.DataFrame(rows_t)
-                        st.dataframe(res, use_container_width=True)
+
+                        # Ordenar por p-value usado (más significativas arriba)
+                        res_sorted = res.sort_values("used_p_value").reset_index(drop=True)
+
+                        # ID v1, v2, v3, ...
+                        res_sorted["variable_id"] = [f"v{i+1}" for i in range(len(res_sorted))]
+
+                        # Tabla resumida que quieres mostrar
+                        df_display = res_sorted[["variable_id", "variable", "used_t", "used_p_value"]].copy()
+                        df_display.columns = ["variable_id", "variable_name", "t_value", "p_value"]
+
+                        # Columnas de alphas con x / xx / xxx
+                        df_display["alpha_0.10"] = np.where(df_display["p_value"] < 0.10, "x", "")
+                        df_display["alpha_0.05"] = np.where(df_display["p_value"] < 0.05, "xx", "")
+                        df_display["alpha_0.01"] = np.where(df_display["p_value"] < 0.01, "xxx", "")
+
+                        st.dataframe(df_display, use_container_width=True)
                         st.caption(
-                            "F-test decides whether to use equal-variance or unequal-variance t-test. "
-                            "Variables with used p-value < 0.05 are selected."
+                            "Variables are ordered by p-value (smallest first). "
+                            "x / xx / xxx indicate significance at α = 0.10 / 0.05 / 0.01 respectively."
                         )
 
-                        # ✅ Save selected features from t-test
+                        # Guardar features significativas para stepwise
                         st.session_state["ttest_sig_features"] = selected_features
 
                         if selected_features:
@@ -1108,13 +1128,11 @@ and any binary classification workflow ⚡
                         st.markdown("---")
                         st.subheader("Forward stepwise logistic regression (based on t-test results)")
 
-                        # ===== Build modeling matrix for stepwise =====
-                        # 👉 YA NO usamos build_model_matrix(df) aquí,
-                        # sino el dataset balanceado d_for_tests
+                        # 4) Stepwise usando el mismo dataset balanceado
                         if d_for_tests.empty:
                             st.info("Not enough numeric features or valid 0/1 target to run stepwise selection.")
                         else:
-                            # 🎯 Candidate pool: t-test-selected vars if available
+                            # Pool de candidatos: los que pasaron t-test, o todos si no hubo ninguno
                             if selected_features:
                                 candidate_feats = [
                                     c for c in selected_features
@@ -1125,7 +1143,6 @@ and any binary classification workflow ⚡
                                     f"variables that passed the t-tests."
                                 )
                             else:
-                                # Fallback: all numeric predictors
                                 candidate_feats = [
                                     c for c in d_for_tests.columns if c != "target"
                                 ]
@@ -1183,10 +1200,10 @@ and any binary classification workflow ⚡
                                             + ", ".join(feats_sw)
                                         )
 
-                                        # Save raw stepwise features
+                                        # Guardar features del stepwise
                                         st.session_state["stepwise_features"] = feats_sw
 
-                                        # ✅ Final feature set for modeling
+                                        # Conjunto final para modelos
                                         final_feats = feats_sw
                                         st.success(
                                             f"Final feature set for modeling (t-test → stepwise): "
@@ -1194,11 +1211,12 @@ and any binary classification workflow ⚡
                                         )
                                         st.caption(", ".join(final_feats))
 
-                                        # Save final feature set for Prediction Models tab
+                                        # Guardar para la pestaña Prediction Models
                                         st.session_state["selected_features_for_modeling"] = final_feats
                                         st.caption("✅ Final feature set saved for the Prediction Models tab.")
 
         st.markdown('</div>', unsafe_allow_html=True)
+
 
 
     # ========== Class Balancing ==========
