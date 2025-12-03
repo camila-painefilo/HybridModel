@@ -617,8 +617,8 @@ and any binary classification workflow ⚡
             [
                 "🧭 Data Exploration",
                 "📈 Data Visualization",
-                "📏 t-Tests & Stepwise",
                 "⚖️ Class Balancing",
+                "📏 t-Tests & Stepwise",
                 "🔮 Prediction Models (Hybrid)",
             ],
             index=0,
@@ -978,15 +978,48 @@ and any binary classification workflow ⚡
         if "target" not in df.columns:
             st.info("No 'target' column found.")
         else:
-            tnum = pd.to_numeric(df["target"], errors="coerce")
+            # 1) Construir matriz de modelado base (misma que para los modelos)
+            d_model_sw = build_model_matrix(df)
+            if d_model_sw.empty:
+                st.info("Not enough numeric features or valid 0/1 target to run t-tests / stepwise.")
+                st.markdown('</div>', unsafe_allow_html=True)
+                st.stop()
+
+            # 2) Aplicar método de class balancing elegido en el tab ⚖️
+            balance_method = st.session_state.get("balance_method", "None")
+
+            X_base = d_model_sw.drop(columns=["target"])
+            y_base = d_model_sw["target"].astype(int)
+
+            if balance_method == "Undersampling":
+                X_bal, y_bal = undersample_train(
+                    X_base, y_base, random_state=int(random_state)
+                )
+                d_for_tests = pd.concat(
+                    [X_bal, y_bal.rename("target")], axis=1
+                )
+                st.caption("Using undersampled dataset for t-tests & stepwise.")
+            elif balance_method == "SMOTE":
+                sm = SMOTE(random_state=int(random_state))
+                X_bal, y_bal = sm.fit_resample(X_base, y_base)
+                d_for_tests = pd.concat(
+                    [X_bal, y_bal.rename("target")], axis=1
+                )
+                st.caption("Using SMOTE-balanced dataset for t-tests & stepwise.")
+            else:
+                d_for_tests = d_model_sw.copy()
+                st.caption("Using original (unbalanced) dataset for t-tests & stepwise.")
+
+            # 3) t-tests usando el dataset balanceado d_for_tests
+            tnum = d_for_tests["target"].astype(int)
             mask_valid = tnum.isin([0, 1])
             if mask_valid.sum() < 2 or tnum[mask_valid].nunique() < 2:
                 st.info("Both target groups (0 and 1) must be present to run t-tests.")
             else:
                 # 🎯 Use ALL numeric predictors (except target)
                 VARS = [
-                    c for c in df.columns
-                    if c != "target" and pd.api.types.is_numeric_dtype(df[c])
+                    c for c in d_for_tests.columns
+                    if c != "target" and pd.api.types.is_numeric_dtype(d_for_tests[c])
                 ]
 
                 if not VARS:
@@ -996,11 +1029,11 @@ and any binary classification workflow ⚡
                     selected_features = []  # variables finally chosen by t-test (p < 0.05)
 
                     for col in VARS:
-                        s = pd.to_numeric(df[col], errors="coerce")
-                        d = pd.DataFrame({"y": s, "t": tnum}).dropna()
+                        s = pd.to_numeric(d_for_tests[col], errors="coerce")
+                        d_loc = pd.DataFrame({"y": s, "t": tnum}).dropna()
 
-                        g0 = d.loc[d["t"] == 0, "y"].values  # target = 0
-                        g1 = d.loc[d["t"] == 1, "y"].values  # target = 1
+                        g0 = d_loc.loc[d_loc["t"] == 0, "y"].values  # target = 0
+                        g1 = d_loc.loc[d_loc["t"] == 1, "y"].values  # target = 1
 
                         if len(g0) < 2 or len(g1) < 2:
                             continue
@@ -1076,15 +1109,16 @@ and any binary classification workflow ⚡
                         st.subheader("Forward stepwise logistic regression (based on t-test results)")
 
                         # ===== Build modeling matrix for stepwise =====
-                        d_model_sw = build_model_matrix(df)
-                        if d_model_sw.empty:
+                        # 👉 YA NO usamos build_model_matrix(df) aquí,
+                        # sino el dataset balanceado d_for_tests
+                        if d_for_tests.empty:
                             st.info("Not enough numeric features or valid 0/1 target to run stepwise selection.")
                         else:
                             # 🎯 Candidate pool: t-test-selected vars if available
                             if selected_features:
                                 candidate_feats = [
                                     c for c in selected_features
-                                    if c in d_model_sw.columns and c != "target"
+                                    if c in d_for_tests.columns and c != "target"
                                 ]
                                 st.caption(
                                     f"Stepwise candidate pool: {len(candidate_feats)} "
@@ -1093,7 +1127,7 @@ and any binary classification workflow ⚡
                             else:
                                 # Fallback: all numeric predictors
                                 candidate_feats = [
-                                    c for c in d_model_sw.columns if c != "target"
+                                    c for c in d_for_tests.columns if c != "target"
                                 ]
                                 st.warning(
                                     "Running stepwise on all numeric predictors because "
@@ -1106,8 +1140,8 @@ and any binary classification workflow ⚡
                                     "(need at least 2 numeric predictors)."
                                 )
                             else:
-                                X_sw_all = d_model_sw[candidate_feats]
-                                y_sw_all = d_model_sw["target"].astype(int)
+                                X_sw_all = d_for_tests[candidate_feats]
+                                y_sw_all = d_for_tests["target"].astype(int)
 
                                 from sklearn.model_selection import train_test_split as tts
 
@@ -1124,22 +1158,20 @@ and any binary classification workflow ⚡
                                     stratify=y_temp_sw
                                 )
 
-                                    # 🔧 Stepwise будет рассматривать все кандидатные признак
-                                
                                 max_feats_sw = X_sw_all.shape[1]
-                            
+
                                 st.caption(
-                                    f"Stepwise candidate pool: {max_feats_sw} variables that passed the t-tests. "
+                                    f"Stepwise candidate pool: {max_feats_sw} variables. "
                                     "The algorithm will automatically decide how many features to keep."
                                 )
-                            
+
                                 if st.button("Run stepwise selection", key="btn_stepwise_ttest_tab"):
                                     feats_sw = stepwise_select_features(
                                         X_train_sw, y_train_sw,
                                         X_val_sw, y_val_sw,
                                         max_features=max_feats_sw,
                                     )
-                            
+
                                     if not feats_sw:
                                         st.warning(
                                             "Stepwise did not find any feature that improves AUC over the baseline."
@@ -1150,10 +1182,10 @@ and any binary classification workflow ⚡
                                             f"(from {max_feats_sw} candidates):\n\n"
                                             + ", ".join(feats_sw)
                                         )
-                            
+
                                         # Save raw stepwise features
                                         st.session_state["stepwise_features"] = feats_sw
-                            
+
                                         # ✅ Final feature set for modeling
                                         final_feats = feats_sw
                                         st.success(
@@ -1161,13 +1193,13 @@ and any binary classification workflow ⚡
                                             f"{len(final_feats)} features."
                                         )
                                         st.caption(", ".join(final_feats))
-                            
+
                                         # Save final feature set for Prediction Models tab
                                         st.session_state["selected_features_for_modeling"] = final_feats
                                         st.caption("✅ Final feature set saved for the Prediction Models tab.")
 
-
         st.markdown('</div>', unsafe_allow_html=True)
+
 
     # ========== Class Balancing ==========
     elif page == "⚖️ Class Balancing":
