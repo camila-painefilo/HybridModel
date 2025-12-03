@@ -140,9 +140,9 @@ and any binary classification workflow ⚡
     # 1) Target column
     with c1:
         target_col = st.selectbox(
-            "Select target (label) column",
+            "Select target (label) variable",
             options=df_full.columns,
-            help="If the selected column is not binary (0/1), you will be able to map which values correspond to target=1 and target=0."
+            help="If the selected variable is not binary (0/1), you will be able to map which values correspond to target=1 and target=0."
         )
 
     target_raw = df_full[target_col]
@@ -256,7 +256,7 @@ and any binary classification workflow ⚡
         max_value=100,
         value=50,
         step=5,
-        help="Columns with a higher percentage of missing values will be excluded from modeling.",
+        help="Variables with a higher percentage of missing values will be excluded from modeling.",
     )
 
     st.write("")
@@ -299,7 +299,7 @@ and any binary classification workflow ⚡
             help="If selected, the system extracts the year and creates an 'issue_year' column."
         )
     else:
-        st.caption("No date-like columns detected.")
+        st.caption("No date-like variables detected.")
 
     # 3) Create issue_year using intelligent multi-format parsing
     if date_col_choice and date_col_choice != "(None)":
@@ -337,7 +337,7 @@ and any binary classification workflow ⚡
             df_full["issue_year"] = parsed_dates.dt.year
         else:
             st.warning(
-                f"Column '{date_col_choice}' does not appear to be a valid date column "
+                f"Column '{date_col_choice}' does not appear to be a valid date variable "
                 f"({valid_ratio*100:.1f}% valid dates)."
             )
 
@@ -646,29 +646,55 @@ and any binary classification workflow ⚡
         with c3_:
             st.metric("Avg missing (sample)", f"{avg_missing:.2f}%")
 
+        # IDs de variables: v1, v2, v3... (basados en el orden de df.columns)
+        var_ids = {col: f"v{i+1}" for i, col in enumerate(df.columns)}
+
+        # ---------- Column data types ----------
         st.markdown("#### Column data types")
         dtypes_df = (
             df.dtypes.reset_index().rename(columns={"index": "column", 0: "dtype"})
         )
         dtypes_df["dtype"] = dtypes_df["dtype"].astype(str)
-        st.dataframe(dtypes_df, use_container_width=True)
 
+        # Añadir columna v (v1, v2, v3...)
+        dtypes_df.insert(0, "v", dtypes_df["column"].map(var_ids))
+
+        # Estilo pequeño para la columna v
+        dtypes_style = dtypes_df.style.set_properties(
+            subset=["v"],
+            **{"font-size": "0.8rem", "color": "#6b7280"}
+        )
+        st.dataframe(dtypes_style, use_container_width=True)
+
+        # ---------- Missing values per column ----------
         st.markdown("#### Missing values per column")
         missing_count = df.isna().sum()
         missing_pct_col = df.isna().mean() * 100
+
         missing_df = pd.DataFrame({
             "column": df.columns,
             "missing_count": missing_count.values,
             "missing_pct (%)": missing_pct_col.values,
         }).sort_values("missing_count", ascending=False)
         missing_df["missing_pct (%)"] = missing_df["missing_pct (%)"].round(2)
-        st.dataframe(missing_df, use_container_width=True)
 
+        # Añadir columna v usando el mismo diccionario
+        missing_df.insert(0, "v", missing_df["column"].map(var_ids))
+
+        missing_style = missing_df.style.set_properties(
+            subset=["v"],
+            **{"font-size": "0.8rem", "color": "#6b7280"}
+        )
+        st.dataframe(missing_style, use_container_width=True)
+
+        # ---------- Head ----------
         st.markdown("#### Head (first non-empty rows)")
         head_df = sample.dropna(how="all").head(10)
         st.dataframe(head_df, use_container_width=True)
 
+        # ---------- Statistical summary (`describe`) ----------
         st.markdown("#### Statistical summary (`describe`)")
+
         # Numeric summary
         num_sample = sample.select_dtypes(include=["number"])
         if not num_sample.empty:
@@ -685,6 +711,7 @@ and any binary classification workflow ⚡
             st.dataframe(desc_cat, use_container_width=True)
 
         st.markdown('</div>', unsafe_allow_html=True)
+
 
     # ========== Distributions ==========
     elif page == "📈 Data Visualization":
