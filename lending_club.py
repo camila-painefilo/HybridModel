@@ -669,7 +669,7 @@ and any binary classification workflow ⚡
         missing_pct_col = df.isna().mean() * 100
 
         missing_df = pd.DataFrame({
-            "column": df.columns,
+            "Variable Name": df.columns,
             "missing_count": missing_count.values,
             "missing_pct (%)": missing_pct_col.values,
         })
