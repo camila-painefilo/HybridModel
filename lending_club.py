@@ -407,7 +407,7 @@ and any binary classification workflow ⚡
         )
     with k2:
         st.markdown(
-            f'<div class="kpi"><div class="label">Columns</div>'
+            f'<div class="kpi"><div class="label">Variables</div>'
             f'<div class="value">{total_cols}</div></div>',
             unsafe_allow_html=True,
         )
