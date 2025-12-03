@@ -625,8 +625,7 @@ and any binary classification workflow ⚡
         )
 
 
-
-           # ========== Data Exploration ==========
+    # ========== Data Exploration ==========
     if page == "🧭 Data Exploration":
         st.markdown('<div class="card">', unsafe_allow_html=True)
         st.subheader("Data Exploration — quick view")
@@ -656,17 +655,13 @@ and any binary classification workflow ⚡
         )
         dtypes_df["dtype"] = dtypes_df["dtype"].astype(str)
         dtypes_df.insert(0, "v", dtypes_df["column"].map(var_ids))
-
-        # quitar números de índice
         dtypes_df = dtypes_df.reset_index(drop=True)
-        dtypes_df.index = [""] * len(dtypes_df)
 
-        dtypes_style = dtypes_df.style.set_properties(
-            subset=["v"],
-            **{"font-size": "0.8rem", "color": "#6b7280"}
-        )
-
-        st.dataframe(dtypes_style, use_container_width=True)
+        try:
+            st.dataframe(dtypes_df, use_container_width=True, hide_index=True)
+        except TypeError:
+            # por si tu versión de Streamlit no tiene hide_index
+            st.dataframe(dtypes_df, use_container_width=True)
 
         # ---------- Missing values per column ----------
         st.markdown("#### Missing values per column")
@@ -681,24 +676,21 @@ and any binary classification workflow ⚡
         missing_df["missing_pct (%)"] = missing_df["missing_pct (%)"].round(2)
         missing_df.insert(0, "v", missing_df["column"].map(var_ids))
         missing_df = missing_df.sort_values("missing_count", ascending=False)
-
-        # quitar números de índice
         missing_df = missing_df.reset_index(drop=True)
-        missing_df.index = [""] * len(missing_df)
 
-        missing_style = missing_df.style.set_properties(
-            subset=["v"],
-            **{"font-size": "0.8rem", "color": "#6b7280"}
-        )
-
-        st.dataframe(missing_style, use_container_width=True)
+        try:
+            st.dataframe(missing_df, use_container_width=True, hide_index=True)
+        except TypeError:
+            st.dataframe(missing_df, use_container_width=True)
 
         # ---------- Head ----------
         st.markdown("#### Head (first non-empty rows)")
         head_df = sample.dropna(how="all").head(10)
         head_df = head_df.reset_index(drop=True)
-        head_df.index = [""] * len(head_df)
-        st.dataframe(head_df, use_container_width=True)
+        try:
+            st.dataframe(head_df, use_container_width=True, hide_index=True)
+        except TypeError:
+            st.dataframe(head_df, use_container_width=True)
 
         # ---------- Statistical summary (`describe`) ----------
         st.markdown("#### Statistical summary (`describe`)")
@@ -709,19 +701,15 @@ and any binary classification workflow ⚡
             st.markdown("##### Numeric summary")
             desc_num = num_sample.describe().T.round(3)
 
-            # añadir v y nombre de columna
-            desc_num["v"] = desc_num.index.map(var_ids)
-            desc_num["column"] = desc_num.index
-
-            # reordenar: v, column, luego stats
-            cols_order = ["v", "column"] + [c for c in desc_num.columns if c not in ["v", "column"]]
-            desc_num = desc_num[cols_order]
-
-            # quitar índice numérico
+            # añadir v y column
+            desc_num.insert(0, "v", desc_num.index.map(var_ids))
+            desc_num.insert(1, "column", desc_num.index)
             desc_num = desc_num.reset_index(drop=True)
-            desc_num.index = [""] * len(desc_num)
 
-            st.dataframe(desc_num, use_container_width=True)
+            try:
+                st.dataframe(desc_num, use_container_width=True, hide_index=True)
+            except TypeError:
+                st.dataframe(desc_num, use_container_width=True)
 
         # Categorical summary
         cat_sample = sample.select_dtypes(exclude=["number"])
@@ -729,18 +717,17 @@ and any binary classification workflow ⚡
             st.markdown("##### Categorical summary")
             desc_cat = cat_sample.describe().T
 
-            desc_cat["v"] = desc_cat.index.map(var_ids)
-            desc_cat["column"] = desc_cat.index
-
-            cols_order_c = ["v", "column"] + [c for c in desc_cat.columns if c not in ["v", "column"]]
-            desc_cat = desc_cat[cols_order_c]
-
+            desc_cat.insert(0, "v", desc_cat.index.map(var_ids))
+            desc_cat.insert(1, "column", desc_cat.index)
             desc_cat = desc_cat.reset_index(drop=True)
-            desc_cat.index = [""] * len(desc_cat)
 
-            st.dataframe(desc_cat, use_container_width=True)
+            try:
+                st.dataframe(desc_cat, use_container_width=True, hide_index=True)
+            except TypeError:
+                st.dataframe(desc_cat, use_container_width=True)
 
         st.markdown('</div>', unsafe_allow_html=True)
+
 
     # ========== Distributions ==========
     elif page == "📈 Data Visualization":
