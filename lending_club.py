@@ -1407,7 +1407,17 @@ and any binary classification workflow ⚡
                     random_state=int(random_state),
                     stratify=y
                 )
-                st.markdown(f"**Number of features used for modeling:** {len(used_feats)}")
+
+                # Overall target = 1 rate on the modeling dataset
+                target_rate_model = (y == 1).mean() * 100
+
+                # Small metrics row for modeling context
+                c_mod1, c_mod2 = st.columns(2)
+                with c_mod1:
+                    st.metric("Number of features used for modeling", len(used_feats))
+                with c_mod2:
+                    st.metric("Target = 1 Rate (%)", f"{target_rate_model:.2f}%")
+
 
                 # ⭐ Apply class balancing option (TRAIN only)
                 balance_method = st.session_state.get("balance_method", "None")
