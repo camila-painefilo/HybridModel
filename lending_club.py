@@ -647,24 +647,39 @@ and any binary classification workflow ⚡
         st.markdown('<div class="card">', unsafe_allow_html=True)
         st.subheader("Data Exploration — quick view")
         st.write("Sample of the dataframe used for visualizations (after filters).")
-
+    
         SAMPLE_N = 10000
         sample = df if len(df) <= SAMPLE_N else df.sample(SAMPLE_N, random_state=42)
-
+    
         rows_s, cols_s = sample.shape
         avg_missing = sample.isna().mean().mean() * 100
-
-        c1_, c2_, c3_ = st.columns(3)
-        with c1_:
-            st.metric("Rows (sampled)", f"{rows_s:,}")
-        with c2_:
-            st.metric("Variables", f"{cols_s}")
-        with c3_:
-            st.metric("Avg missing (sample)", f"{avg_missing:.2f}%")
-
+    
+        # If target exists, also show Target = 1 Rate (%)
+        if "target" in df.columns:
+            target_rate = (df["target"].astype(float) == 1).mean() * 100
+    
+            c1_, c2_, c3_, c4_ = st.columns(4)
+            with c1_:
+                st.metric("Rows (sampled)", f"{rows_s:,}")
+            with c2_:
+                st.metric("Variables", f"{cols_s}")
+            with c3_:
+                st.metric("Avg missing (sample)", f"{avg_missing:.2f}%")
+            with c4_:
+                st.metric("Target = 1 Rate (%)", f"{target_rate:.2f}%")
+        else:
+            # Fallback: original three metrics
+            c1_, c2_, c3_ = st.columns(3)
+            with c1_:
+                st.metric("Rows (sampled)", f"{rows_s:,}")
+            with c2_:
+                st.metric("Variables", f"{cols_s}")
+            with c3_:
+                st.metric("Avg missing (sample)", f"{avg_missing:.2f}%")
+    
         # IDs de variables v1, v2, v3...
         var_ids = {col: f"v{i+1}" for i, col in enumerate(df.columns)}
-
+        
         # ---------- Column data types ----------
         st.markdown("#### Variable data types")
         dtypes_df = (
