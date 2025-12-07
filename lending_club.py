@@ -1300,12 +1300,18 @@ and any binary classification workflow ⚡
             </div>
             """, unsafe_allow_html=True)
 
-            # Two side-by-side cards 
-            c1b, c2b = st.columns(2)
+             # Summary cards for class counts and positive rate
+            total = counts.sum()
+            target_rate = (counts.get(1, 0) / total * 100) if total > 0 else 0.0
+
+            c1b, c2b, c3b = st.columns(3)
             with c1b:
                 st.metric("Class 0 count", f"{counts.get(0, 0):,}")
             with c2b:
                 st.metric("Class 1 count", f"{counts.get(1, 0):,}")
+            with c3b:
+                st.metric("Target = 1 Rate (%)", f"{target_rate:.2f}%")
+
 
             st.markdown("---")
 
