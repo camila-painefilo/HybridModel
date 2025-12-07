@@ -645,7 +645,7 @@ and any binary classification workflow ⚡
     # ========== Data Exploration ==========
     if page == "🧭 Data Exploration":
         st.markdown('<div class="card">', unsafe_allow_html=True)
-        st.subheader("Data Exploration — quick view")
+        st.subheader("🧭 Data Exploration — quick view")
         st.write("Sample of the dataframe used for visualizations (after filters).")
     
         SAMPLE_N = 10000
@@ -1368,7 +1368,7 @@ and any binary classification workflow ⚡
     # ========== Prediction Models ==========
     elif page == "🔮 Prediction Models (Hybrid)":
         st.markdown('<div class="card">', unsafe_allow_html=True)
-        st.subheader("Prediction Models — Logistic Regression, Decision Tree & Hybrid")
+        st.subheader("🔮 Prediction Models — Logistic Regression, Decision Tree & Hybrid")
         st.caption("Target legend — 0: good outcome, 1: bad outcome (as defined in the analysis settings).")
 
         if "target" not in df.columns:
