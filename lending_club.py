@@ -547,6 +547,23 @@ and any binary classification workflow ⚡
         X_bal = df_bal.drop(columns=["__target__"])
         return X_bal, y_bal
 
+    def gan_oversample(X, y, random_state=42):
+        """
+        Placeholder for GAN-based oversampling.
+    
+        Currently, this function does NOT modify the data.
+        It simply returns the original X and y so that the
+        rest of the pipeline can run without errors.
+    
+        TODO: Replace this with a real GAN-based oversampling
+        implementation in the future.
+        """
+        # In the future, you can:
+        # 1) Train a generator on the minority class
+        # 2) Generate synthetic samples
+        # 3) Concatenate them to the original data and return X_bal, y_bal
+        return X, y
+
     # -------------------- Navigation sidebar --------------------
     with st.sidebar:
     
@@ -988,13 +1005,15 @@ and any binary classification workflow ⚡
                 st.markdown('</div>', unsafe_allow_html=True)
                 st.stop()
 
-            # 2) Aplicar método de class balancing elegido en ⚖️
+            # 2) Apply the class balancing method selected in ⚖️ Class Balancing
             balance_method = st.session_state.get("balance_method", "None")
 
+            # Base design matrix and target used for t-tests & stepwise
             X_base = d_model_sw.drop(columns=["target"])
             y_base = d_model_sw["target"].astype(int)
 
             if balance_method == "Undersampling":
+                # Apply undersampling on the full dataset used for t-tests
                 X_bal, y_bal = undersample_train(
                     X_base, y_base, random_state=int(random_state)
                 )
@@ -1002,16 +1021,31 @@ and any binary classification workflow ⚡
                     [X_bal, y_bal.rename("target")], axis=1
                 )
                 st.caption("Using undersampled dataset for t-tests & stepwise.")
+
             elif balance_method == "SMOTE":
+                # Apply SMOTE on the full dataset used for t-tests
                 sm = SMOTE(random_state=int(random_state))
                 X_bal, y_bal = sm.fit_resample(X_base, y_base)
                 d_for_tests = pd.concat(
                     [X_bal, y_bal.rename("target")], axis=1
                 )
                 st.caption("Using SMOTE-balanced dataset for t-tests & stepwise.")
+
+            elif balance_method == "GAN":
+                # Apply GAN-based oversampling (currently a placeholder)
+                X_bal, y_bal = gan_oversample(
+                    X_base, y_base, random_state=int(random_state)
+                )
+                d_for_tests = pd.concat(
+                    [X_bal, y_bal.rename("target")], axis=1
+                )
+                st.caption("Using GAN-balanced dataset for t-tests & stepwise (placeholder, no real GAN yet).")
+
             else:
+                # No balancing; use the original dataset
                 d_for_tests = d_model_sw.copy()
                 st.caption("Using original (unbalanced) dataset for t-tests & stepwise.")
+
 
             # 3) t-tests sobre el dataset (posiblemente balanceado)
             tnum = d_for_tests["target"].astype(int)
@@ -1261,22 +1295,34 @@ and any binary classification workflow ⚡
             st.markdown("---")
 
             # Save choice in session
+            # Available balancing options (including GAN)
+            balance_options = ["None", "Undersampling", "SMOTE", "GAN"]
+
+            # Get the currently selected method from session state (default = "None")
+            current_method = st.session_state.get("balance_method", "None")
+            if current_method not in balance_options:
+                current_method = "None"
+
             method = st.radio(
                 "Select balancing method",
-                ["None", "Undersampling", "SMOTE"],
-                index=["None", "Undersampling", "SMOTE"].index(
-                    st.session_state.get("balance_method", "None")
-                ),
+                balance_options,
+                index=balance_options.index(current_method),
             )
             st.session_state.balance_method = method
 
-            # Explanation message
+            # Explanation message for each balancing option
             if method == "None":
                 st.info("No balancing will be applied. Models will use the original training split.")
             elif method == "Undersampling":
                 st.warning("Undersampling will downsample the majority class in the **train** set.")
-            else:
+            elif method == "SMOTE":
                 st.warning("SMOTE will generate synthetic samples for the minority class in the **train** set.")
+            elif method == "GAN":
+                st.warning(
+                    "GAN-based oversampling will generate synthetic samples for the minority class "
+                    "in the **train** set (experimental method, currently a placeholder)."
+                )
+
 
             st.divider()
 
@@ -1342,11 +1388,12 @@ and any binary classification workflow ⚡
                 )
                 st.markdown(f"**Number of features used for modeling:** {len(used_feats)}")
 
-                # ⭐ NEW: apply class balancing option (TRAIN only)
+                # ⭐ Apply class balancing option (TRAIN only)
                 balance_method = st.session_state.get("balance_method", "None")
                 X_train_model, y_train_model = X_train, y_train  # default: no balancing
 
                 if balance_method == "Undersampling":
+                    # Apply undersampling on the TRAIN split
                     X_train_model, y_train_model = undersample_train(
                         X_train, y_train, random_state=int(random_state)
                     )
@@ -1358,11 +1405,12 @@ and any binary classification workflow ⚡
                     )
                     st.success(msg)
 
-                    # ✅ Save for Class Balancing tab
+                    # Save status so it can be shown in the Class Balancing tab
                     st.session_state.balance_status_msg = msg
                     st.session_state.balance_status_counts = dict(counts_bal)
 
                 elif balance_method == "SMOTE":
+                    # Apply SMOTE on the TRAIN split
                     sm = SMOTE(random_state=int(random_state))
                     X_train_model, y_train_model = sm.fit_resample(X_train, y_train)
                     counts_bal = pd.Series(y_train_model).value_counts().sort_index()
@@ -1373,15 +1421,36 @@ and any binary classification workflow ⚡
                     )
                     st.success(msg)
 
-                    # ✅ Save for Class Balancing tab
+                    # Save status so it can be shown in the Class Balancing tab
                     st.session_state.balance_status_msg = msg
                     st.session_state.balance_status_counts = dict(counts_bal)
+
+                elif balance_method == "GAN":
+                    # Apply GAN-based oversampling on the TRAIN split
+                    # (currently a placeholder that returns the original data)
+                    X_train_model, y_train_model = gan_oversample(
+                        X_train, y_train, random_state=int(random_state)
+                    )
+                    counts_bal = pd.Series(y_train_model).value_counts().sort_index()
+                    msg = (
+                        f"✔ GAN-based oversampling applied on TRAIN set (placeholder). "
+                        f"New distribution — 0: {counts_bal.get(0, 0):,}, "
+                        f"1: {counts_bal.get(1, 0):,}"
+                    )
+                    st.success(msg)
+
+                    # Save status so it can be shown in the Class Balancing tab
+                    st.session_state.balance_status_msg = msg
+                    st.session_state.balance_status_counts = dict(counts_bal)
+
                 else:
+                    # No balancing applied
                     msg = "No class balancing applied (using original train split)."
                     st.info(msg)
 
                     st.session_state.balance_status_msg = msg
                     st.session_state.balance_status_counts = None
+
 
                 # ----------------- A. Baseline Logit -----------------
                 st.markdown("### A. Baseline Logistic Regression")
