@@ -26,6 +26,8 @@ def main():
 
     # ✅ GAN library (only loaded when the app actually runs)
     from ctgan import CTGAN   # or CTGANSynthesizer depending on your version
+    import warnings
+    warnings.filterwarnings("ignore", category=UserWarning, module="altair")
 
 
     # -------------------- Page & Theme --------------------
