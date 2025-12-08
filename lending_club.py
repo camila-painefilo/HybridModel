@@ -1135,46 +1135,22 @@ and any binary classification workflow ⚡
                 st.markdown('</div>', unsafe_allow_html=True)
                 st.stop()
 
-            # 2) Apply the class balancing method selected in ⚖️ Class Balancing
-            balance_method = st.session_state.get("balance_method", "None")
-
-            # Base design matrix and target used for t-tests & stepwise
-            X_base = d_model_sw.drop(columns=["target"])
-            y_base = d_model_sw["target"].astype(int)
-
-            if balance_method == "Undersampling":
-                # Apply undersampling on the full dataset used for t-tests
-                X_bal, y_bal = undersample_train(
-                    X_base, y_base, random_state=int(random_state)
-                )
+        #    2) Choose dataset for t-tests & stepwise:
+        #    if a globally balanced dataset exists (from ⚖️ Class Balancing),
+        #    use it. Otherwise, use the original modeling matrix.
+            if "X_balanced" in st.session_state and "y_balanced" in st.session_state:
                 d_for_tests = pd.concat(
-                    [X_bal, y_bal.rename("target")], axis=1
+                    [
+                        st.session_state["X_balanced"],
+                        st.session_state["y_balanced"].rename("target")
+                    ],
+                    axis=1
                 )
-                st.caption("Using undersampled dataset for t-tests & stepwise.")
-
-            elif balance_method == "SMOTE":
-                # Apply SMOTE on the full dataset used for t-tests
-                sm = SMOTE(random_state=int(random_state))
-                X_bal, y_bal = sm.fit_resample(X_base, y_base)
-                d_for_tests = pd.concat(
-                    [X_bal, y_bal.rename("target")], axis=1
-                )
-                st.caption("Using SMOTE-balanced dataset for t-tests & stepwise.")
-
-            elif balance_method == "GAN":
-                # Apply GAN-based oversampling (currently a placeholder)
-                X_bal, y_bal = gan_oversample(
-                    X_base, y_base, random_state=int(random_state)
-                )
-                d_for_tests = pd.concat(
-                    [X_bal, y_bal.rename("target")], axis=1
-                )
-                st.caption("Using GAN-balanced dataset for t-tests & stepwise.")
-
+                st.caption("Using globally balanced dataset from ⚖️ Class Balancing for t-tests & stepwise.")
             else:
-                # No balancing; use the original dataset
                 d_for_tests = d_model_sw.copy()
                 st.caption("Using original (unbalanced) dataset for t-tests & stepwise.")
+    
 
 
             # 3) t-tests sobre el dataset (posiblemente balanceado)
@@ -1446,6 +1422,48 @@ and any binary classification workflow ⚡
             )
             st.session_state.balance_method = method
 
+            if st.button("🚀 Apply Class Balancing"):
+                # Build base modeling matrix
+                d_model_bal = build_model_matrix(df)
+            
+                if d_model_bal.empty:
+                    st.warning("Not enough valid numeric features or target to apply class balancing.")
+                    st.stop()
+            
+                X_base = d_model_bal.drop(columns=["target"])
+                y_base = d_model_bal["target"].astype(int)
+            
+                if method == "Undersampling":
+                    Xb, yb = undersample_train(X_base, y_base, random_state=int(random_state))
+            
+                elif method == "SMOTE":
+                    sm = SMOTE(random_state=int(random_state))
+                    Xb, yb = sm.fit_resample(X_base, y_base)
+            
+                elif method == "GAN":
+                    Xb, yb = gan_oversample(
+                        X_base, y_base, random_state=int(random_state)
+                    )
+            
+                else:
+                    Xb, yb = X_base.copy(), y_base.copy()
+            
+                # ✅ Store globally in session_state
+                st.session_state["X_balanced"] = Xb
+                st.session_state["y_balanced"] = yb
+            
+                counts_bal = yb.value_counts().sort_index()
+                msg = (
+                    f"✔ {method} applied globally. "
+                    f"0: {counts_bal.get(0,0):,} | 1: {counts_bal.get(1,0):,}"
+                )
+            
+                st.session_state.balance_status_msg = msg
+                st.session_state.balance_status_counts = dict(counts_bal)
+            
+                st.success(msg)
+
+
             # Explanation message for each balancing option
             if method == "None":
                 st.info("No balancing will be applied. Models will use the original training split.")
@@ -1481,11 +1499,12 @@ and any binary classification workflow ⚡
         st.markdown('</div>', unsafe_allow_html=True)
 
     # ========== Prediction Models ==========
+
     elif page == "🔮 Prediction Models (Hybrid)":
         st.markdown('<div class="card">', unsafe_allow_html=True)
         st.subheader("🔮 Prediction Models — Logistic Regression, Decision Tree & Hybrid")
         st.caption("Target legend — 0: good outcome, 1: bad outcome (as defined in the analysis settings).")
-
+    
         if "target" not in df.columns:
             st.info("No 'target' column found.")
         else:
@@ -1494,10 +1513,10 @@ and any binary classification workflow ⚡
                 st.info("Not enough numeric features or valid 0/1 target after preprocessing.")
             else:
                 all_feats = [c for c in d_model.columns if c != "target"]
-
+    
                 # 🔍 Use final feature set from t-Tests & Stepwise tab (if exists)
                 selected_feats = st.session_state.get("selected_features_for_modeling")
-
+    
                 if selected_feats:
                     selected_feats = [f for f in selected_feats if f in all_feats]
                 if selected_feats:
@@ -1512,90 +1531,35 @@ and any binary classification workflow ⚡
                         f"No final feature set found yet. "
                         f"Using all {len(used_feats)} numeric features for modeling."
                     )
-
+    
                 X = d_model[used_feats]
                 y = d_model["target"].astype(int)
-
+    
                 X_train, X_test, y_train, y_test = train_test_split(
                     X, y,
                     test_size=test_size,
                     random_state=int(random_state),
                     stratify=y
                 )
-
+    
                 # Overall target = 1 rate on the modeling dataset
                 target_rate_model = (y == 1).mean() * 100
-
+    
                 # Small metrics row for modeling context
                 c_mod1, c_mod2 = st.columns(2)
                 with c_mod1:
                     st.metric("Number of features used for modeling", len(used_feats))
                 with c_mod2:
                     st.metric("Target = 1 Rate (%)", f"{target_rate_model:.2f}%")
-
-
-                # ⭐ Apply class balancing option (TRAIN only)
-                balance_method = st.session_state.get("balance_method", "None")
-                X_train_model, y_train_model = X_train, y_train  # default: no balancing
-
-                if balance_method == "Undersampling":
-                    # Apply undersampling on the TRAIN split
-                    X_train_model, y_train_model = undersample_train(
-                        X_train, y_train, random_state=int(random_state)
-                    )
-                    counts_bal = y_train_model.value_counts().sort_index()
-                    msg = (
-                        f"✔ Undersampling applied on TRAIN set. "
-                        f"New distribution — 0: {counts_bal.get(0, 0):,}, "
-                        f"1: {counts_bal.get(1, 0):,}"
-                    )
-                    st.success(msg)
-
-                    # Save status so it can be shown in the Class Balancing tab
-                    st.session_state.balance_status_msg = msg
-                    st.session_state.balance_status_counts = dict(counts_bal)
-
-                elif balance_method == "SMOTE":
-                    # Apply SMOTE on the TRAIN split
-                    sm = SMOTE(random_state=int(random_state))
-                    X_train_model, y_train_model = sm.fit_resample(X_train, y_train)
-                    counts_bal = pd.Series(y_train_model).value_counts().sort_index()
-                    msg = (
-                        f"✔ SMOTE applied on TRAIN set. "
-                        f"New distribution — 0: {counts_bal.get(0, 0):,}, "
-                        f"1: {counts_bal.get(1, 0):,}"
-                    )
-                    st.success(msg)
-
-                    # Save status so it can be shown in the Class Balancing tab
-                    st.session_state.balance_status_msg = msg
-                    st.session_state.balance_status_counts = dict(counts_bal)
-
-                elif balance_method == "GAN":
-                    # Apply GAN-based oversampling on the TRAIN split
-                    # (currently a placeholder that returns the original data)
-                    X_train_model, y_train_model = gan_oversample(
-                        X_train, y_train, random_state=int(random_state)
-                    )
-                    counts_bal = pd.Series(y_train_model).value_counts().sort_index()
-                    msg = (
-                        f"✔ GAN-based oversampling applied on TRAIN set (placeholder). "
-                        f"New distribution — 0: {counts_bal.get(0, 0):,}, "
-                        f"1: {counts_bal.get(1, 0):,}"
-                    )
-                    st.success(msg)
-
-                    # Save status so it can be shown in the Class Balancing tab
-                    st.session_state.balance_status_msg = msg
-                    st.session_state.balance_status_counts = dict(counts_bal)
-
+    
+                # ⭐ Use balanced dataset IF it already exists (applied in ⚖️ Class Balancing)
+                if "X_balanced" in st.session_state and "y_balanced" in st.session_state:
+                    X_train_model = st.session_state["X_balanced"]
+                    y_train_model = st.session_state["y_balanced"]
+                    st.success("Using globally balanced dataset from ⚖️ Class Balancing.")
                 else:
-                    # No balancing applied
-                    msg = "No class balancing applied (using original train split)."
-                    st.info(msg)
-
-                    st.session_state.balance_status_msg = msg
-                    st.session_state.balance_status_counts = None
+                    X_train_model, y_train_model = X_train, y_train
+                    st.info("Using original (unbalanced) TRAIN split.")
 
 
                 # ----------------- A. Baseline Logit -----------------
