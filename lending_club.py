@@ -857,15 +857,19 @@ and any binary classification workflow ⚡
         if not cat_sample.empty:
             st.markdown("##### Categorical summary")
             desc_cat = cat_sample.describe().T
-
+        
             desc_cat.insert(0, "v", desc_cat.index.map(var_ids))
             desc_cat.insert(1, "Variable name", desc_cat.index)
             desc_cat = desc_cat.reset_index(drop=True)
-
+        
+            # ✅ CRITICAL FIX: force everything to string for Arrow safety
+            desc_cat = desc_cat.astype(str)
+        
             try:
                 st.dataframe(desc_cat, use_container_width=True, hide_index=True)
             except TypeError:
                 st.dataframe(desc_cat, use_container_width=True)
+
 
         st.markdown('</div>', unsafe_allow_html=True)
 
