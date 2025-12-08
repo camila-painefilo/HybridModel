@@ -504,7 +504,67 @@ and any binary classification workflow ⚡
         pairs = [(f, imp) for f, imp in zip(X_train.columns, importances) if imp > 0]
         pairs.sort(key=lambda x: x[1], reverse=True)
         return [f for f, _ in pairs[:max_features]]
-
+        
+    def backward_stepwise_select_features(X_train, y_train, X_val, y_val, min_features=1):
+        """
+        Backward stepwise feature selection based on validation AUC.
+    
+        1. Начинаем со всех доступных признаков.
+        2. На каждом шаге пробуем удалить по одному признаку.
+        3. Удаляем тот признак, при удалении которого AUC на валидации улучшается больше всего.
+        4. Останавливаемся, когда удаление любого признака НЕ улучшает AUC (с учётом маленького допуска).
+        """
+    
+        selected = list(X_train.columns)
+        if len(selected) <= min_features:
+            return selected
+    
+        base_model = LogisticRegression(
+            max_iter=1000,
+            solver="liblinear",
+            class_weight="balanced"
+        )
+    
+        # AUC с полным набором признаков
+        base_model.fit(X_train[selected], y_train)
+        probs_full = base_model.predict_proba(X_val[selected])[:, 1]
+        best_auc = roc_auc_score(y_val, probs_full)
+    
+        improved = True
+        tol = 1e-4  # маленький шаг улучшения
+    
+        while improved and len(selected) > min_features:
+            improved = False
+            best_candidate_auc = best_auc
+            feature_to_remove = None
+    
+            for f in selected:
+                feats = [g for g in selected if g != f]
+                if not feats:
+                    continue
+    
+                model = LogisticRegression(
+                    max_iter=1000,
+                    solver="liblinear",
+                    class_weight="balanced"
+                )
+                model.fit(X_train[feats], y_train)
+                probs = model.predict_proba(X_val[feats])[:, 1]
+                auc = roc_auc_score(y_val, probs)
+    
+                if auc > best_candidate_auc + tol:
+                    best_candidate_auc = auc
+                    feature_to_remove = f
+    
+            if feature_to_remove is not None:
+                selected.remove(feature_to_remove)
+                best_auc = best_candidate_auc
+                improved = True
+            else:
+                break
+    
+        return selected
+#forward stepwise
     def stepwise_select_features(X_train, y_train, X_val, y_val, max_features=15):
         remaining = list(X_train.columns)
         selected = []
@@ -1331,38 +1391,45 @@ and any binary classification workflow ⚡
                                     "The algorithm will automatically decide how many features to keep."
                                 )
 
-                                if st.button("Run stepwise selection", key="btn_stepwise_ttest_tab"):
-                                    feats_sw = stepwise_select_features(
-                                        X_train_sw, y_train_sw,
-                                        X_val_sw, y_val_sw,
-                                        max_features=max_feats_sw,
-                                    )
+                                stepwise_direction = st.radio(
+                                "Stepwise direction",
+                                options=["Forward", "Backward"],
+                                index=0,
+                                horizontal=True,
+                                key="stepwise_direction",
+                                help="Forward = add features one by one. Backward = start with all features and remove weak ones.")
 
-                                    if not feats_sw:
-                                        st.warning(
-                                            "Stepwise did not find any feature that improves AUC over the baseline."
+                                if st.button("Run stepwise selection", key="btn_stepwise_ttest_tab"):
+    
+                                    direction = st.session_state["stepwise_direction"]
+                                
+                                    if direction == "Forward":
+                                        feats_sw = stepwise_select_features(
+                                            X_train_sw, y_train_sw,
+                                            X_val_sw, y_val_sw,
+                                            max_features=max_feats_sw,
                                         )
+                                    else:  # Backward
+                                        min_feats_sw = min(3, X_sw_all.shape[1])  # keep at least 3 features
+                                        feats_sw = backward_stepwise_select_features(
+                                            X_train_sw, y_train_sw,
+                                            X_val_sw, y_val_sw,
+                                            min_features=min_feats_sw,
+                                        )
+                                
+                                    # Handle results
+                                    if not feats_sw:
+                                        st.warning("Stepwise did not find any feature set that improves AUC.")
                                     else:
                                         st.success(
-                                            f"Stepwise selected {len(feats_sw)} features "
-                                            f"(from {max_feats_sw} candidates):\n\n"
-                                            + ", ".join(feats_sw)
+                                            f"{direction} stepwise selected {len(feats_sw)} features:\n" +
+                                            ", ".join(feats_sw)
                                         )
-
-                                        # Guardar features del stepwise
+                                
                                         st.session_state["stepwise_features"] = feats_sw
+                                        st.session_state["selected_features_for_modeling"] = feats_sw
+                                        st.caption("Final feature set saved for the Prediction Models tab.")
 
-                                        # Conjunto final para modelos
-                                        final_feats = feats_sw
-                                        st.success(
-                                            f"Final feature set for modeling (t-test → stepwise): "
-                                            f"{len(final_feats)} features."
-                                        )
-                                        st.caption(", ".join(final_feats))
-
-                                        # Guardar para la pestaña Prediction Models
-                                        st.session_state["selected_features_for_modeling"] = final_feats
-                                        st.caption("✅ Final feature set saved for the Prediction Models tab.")
 
         st.markdown('</div>', unsafe_allow_html=True)
 
