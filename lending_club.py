@@ -1335,13 +1335,13 @@ and any binary classification workflow ⚡
                             )
 
                         st.markdown("---")
-                        st.subheader("Forward stepwise logistic regression (based on t-test results)")
-
-                        # 4) Stepwise usando el mismo dataset (posiblemente balanceado)
+                        st.subheader("Stepwise logistic regression (based on t-test results)")
+                        
+                        # 4) Stepwise using the same dataset (possibly balanced)
                         if d_for_tests.empty:
                             st.info("Not enough numeric features or valid 0/1 target to run stepwise selection.")
                         else:
-                            # Pool de candidatos: los que pasaron t-test, o todos si no hubo ninguno
+                            # Pool of candidates: those that passed t-test, or all if none
                             if selected_features:
                                 candidate_feats = [
                                     c for c in selected_features
@@ -1359,7 +1359,7 @@ and any binary classification workflow ⚡
                                     "Running stepwise on all numeric predictors because "
                                     "no variables passed the t-tests."
                                 )
-
+                        
                             if not candidate_feats or len(candidate_feats) < 2:
                                 st.info(
                                     "Not enough candidate features to run stepwise selection "
@@ -1368,9 +1368,9 @@ and any binary classification workflow ⚡
                             else:
                                 X_sw_all = d_for_tests[candidate_feats]
                                 y_sw_all = d_for_tests["target"].astype(int)
-
+                        
                                 from sklearn.model_selection import train_test_split as tts
-
+                        
                                 X_train_sw, X_temp_sw, y_train_sw, y_temp_sw = tts(
                                     X_sw_all, y_sw_all,
                                     test_size=test_size,
@@ -1383,26 +1383,28 @@ and any binary classification workflow ⚡
                                     random_state=int(random_state),
                                     stratify=y_temp_sw
                                 )
-
+                        
                                 max_feats_sw = X_sw_all.shape[1]
-
+                        
                                 st.caption(
                                     f"Stepwise candidate pool: {max_feats_sw} variables. "
                                     "The algorithm will automatically decide how many features to keep."
                                 )
-
+                        
+                                # 🔽 NEW: choice between Forward / Backward
                                 stepwise_direction = st.radio(
-                                "Stepwise direction",
-                                options=["Forward", "Backward"],
-                                index=0,
-                                horizontal=True,
-                                key="stepwise_direction",
-                                help="Forward = add features one by one. Backward = start with all features and remove weak ones.")
-
+                                    "Stepwise direction",
+                                    options=["Forward", "Backward"],
+                                    index=0,
+                                    horizontal=True,
+                                    key="stepwise_direction",
+                                    help="Forward = add features one by one. Backward = start with all features and remove weak ones."
+                                )
+                        
                                 if st.button("Run stepwise selection", key="btn_stepwise_ttest_tab"):
-    
+                        
                                     direction = st.session_state["stepwise_direction"]
-                                
+                        
                                     if direction == "Forward":
                                         feats_sw = stepwise_select_features(
                                             X_train_sw, y_train_sw,
@@ -1416,7 +1418,7 @@ and any binary classification workflow ⚡
                                             X_val_sw, y_val_sw,
                                             min_features=min_feats_sw,
                                         )
-                                
+                        
                                     # Handle results
                                     if not feats_sw:
                                         st.warning("Stepwise did not find any feature set that improves AUC.")
@@ -1425,7 +1427,7 @@ and any binary classification workflow ⚡
                                             f"{direction} stepwise selected {len(feats_sw)} features:\n" +
                                             ", ".join(feats_sw)
                                         )
-                                
+                        
                                         st.session_state["stepwise_features"] = feats_sw
                                         st.session_state["selected_features_for_modeling"] = feats_sw
                                         st.caption("Final feature set saved for the Prediction Models tab.")
