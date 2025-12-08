@@ -564,30 +564,7 @@ and any binary classification workflow ⚡
         GAN-based oversampling using CTGAN, with defensive checks so that
         the app does NOT crash if CTGAN fails.
     
-        Parameters
-        ----------
-        X : pd.DataFrame
-            Feature matrix (numeric or already encoded).
-        y : pd.Series or array-like
-            Binary target (0/1).
-        random_state : int
-            Random seed for reproducibility.
-        minority_label : int
-            Which class you want to oversample (usually 1 = "bad" / event).
-        epochs : int
-            Number of training epochs for CTGAN. Higher = better quality but slower.
-        max_discrete_card : int
-            Columns with <= max_discrete_card unique values are treated as discrete.
-        max_rows_for_gan : int
-            Maximum number of minority rows used to train CTGAN (to avoid OOM / crashes).
-        max_synthetic : int
-            Hard cap on the number of synthetic samples to generate.
-    
-        Returns
-        -------
-        X_bal, y_bal : pd.DataFrame, pd.Series
-            Balanced feature matrix and target with GAN-generated minority samples.
-            If anything goes wrong, returns the original (X, y).
+        Returns balanced X, y. If anything goes wrong, returns original X, y.
         """
         import numpy as np
         import pandas as pd
@@ -604,35 +581,30 @@ and any binary classification workflow ⚡
             return X, y
     
         try:
-            # Basic sanity check: need at least 2 classes
+            # ---------- 1. Checks on target ----------
             vc = y.value_counts()
             if vc.shape[0] < 2:
+                # Only one class present
                 return X, y
     
-            # Detect majority / minority counts
             maj_count = vc.max()
             min_count = vc.min()
     
-            # If already ~balanced, skip GAN
-            if maj_count <= min_count * 1.1:  # less than ~10% imbalance
+            # Already roughly balanced → no GAN
+            if maj_count <= min_count * 1.1:
                 return X, y
     
-            # Build full dataframe including target
+            # ---------- 2. Build full df and choose minority ----------
             df_all = X.copy()
             df_all["target"] = y.values
     
-            # Decide which class to oversample:
-            # 1) Prefer the user-specified minority_label if it exists
-            # 2) Otherwise, use the smallest class
             if minority_label in vc.index:
                 min_cls = minority_label
             else:
                 min_cls = vc.idxmin()
     
-            # Minority subset only
             df_minority = df_all[df_all["target"] == min_cls].reset_index(drop=True)
     
-            # How many synthetic minority samples do we need to match majority count?
             maj_cls = vc.idxmax()
             maj_count = vc[maj_cls]
             current_min_count = df_minority.shape[0]
@@ -640,24 +612,21 @@ and any binary classification workflow ⚡
             if n_to_generate <= 0:
                 return X, y
     
-            # Hard cap on synthetic samples
+            # Hard caps
             n_to_generate = int(min(n_to_generate, max_synthetic))
-    
-            # Limit number of minority rows used to train CTGAN (for speed/stability)
             if df_minority.shape[0] > max_rows_for_gan:
                 df_minority = df_minority.sample(
                     max_rows_for_gan, random_state=random_state
                 ).reset_index(drop=True)
     
-            # ---------- Detect discrete columns generically ----------
-            # Columns with "few" unique values are treated as discrete.
+            # ---------- 3. Detect discrete columns ----------
             discrete_cols = []
             for col in df_minority.columns:
                 nunique = df_minority[col].nunique(dropna=True)
                 if nunique <= max_discrete_card:
                     discrete_cols.append(col)
     
-            # Set random seeds (best effort for reproducibility)
+            # ---------- 4. Set seeds ----------
             np.random.seed(random_state)
             try:
                 import torch
@@ -665,30 +634,35 @@ and any binary classification workflow ⚡
             except ImportError:
                 pass
     
-            # Train CTGAN on the minority class only
+            # ---------- 5. Train CTGAN ----------
             ctgan = CTGAN(
                 epochs=epochs,
                 verbose=False,
             )
             ctgan.fit(df_minority, discrete_cols)
     
-            # Generate synthetic minority samples
+            # ---------- 6. Sample synthetic data ----------
             synth_minority = ctgan.sample(n_to_generate)
-    
-            # Ensure the synthetic samples belong to the minority class
             synth_minority["target"] = min_cls
     
-            # Concatenate original data + synthetic minority samples
             df_balanced = pd.concat([df_all, synth_minority], ignore_index=True)
-    
-            # Shuffle rows for good measure
             df_balanced = df_balanced.sample(
                 frac=1.0, random_state=random_state
             ).reset_index(drop=True)
     
-            # Split back into X, y
+            # ---------- 7. Split back & SANITIZE for ML / Streamlit ----------
             X_bal = df_balanced.drop(columns=["target"])
             y_bal = df_balanced["target"].astype(int)
+    
+            # a) Forcibly convert all features to numeric (non-numeric → NaN)
+            X_bal = X_bal.apply(pd.to_numeric, errors="coerce")
+    
+            # b) Fill NaN with column medians (or 0 if median is NaN)
+            for col in X_bal.columns:
+                med = X_bal[col].median()
+                if pd.isna(med):
+                    med = 0.0
+                X_bal[col] = X_bal[col].fillna(med)
     
             return X_bal, y_bal
     
