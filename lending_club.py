@@ -584,7 +584,15 @@ and any binary classification workflow ⚡
         """
         import numpy as np
         import pandas as pd
-        from ctgan import CTGAN  # local import to avoid breaking the app if lib is missing
+        from ctgan import CTGAN  # your installed version
+    
+        # Set random seeds (best effort for reproducibility)
+        np.random.seed(random_state)
+        try:
+            import torch
+            torch.manual_seed(random_state)
+        except ImportError:
+            pass
     
         # Ensure pandas objects
         X = pd.DataFrame(X).copy()
@@ -628,16 +636,9 @@ and any binary classification workflow ⚡
             return X, y
     
         # ---------- Detect discrete columns generically ----------
-        # We use a simple but robust heuristic:
         # Columns with "few" unique values are treated as discrete.
-        # This works for:
-        #   - binary vars (0/1)
-        #   - ordinal / categorical encoded as integers
-        # Continuous vars (many unique values) stay as continuous.
         discrete_cols = []
         for col in df_minority.columns:
-            # You can keep "target" as discrete or skip it; both work.
-            # Aquí lo incluimos si también tiene baja cardinalidad.
             nunique = df_minority[col].nunique(dropna=True)
             if nunique <= max_discrete_card:
                 discrete_cols.append(col)
@@ -646,7 +647,6 @@ and any binary classification workflow ⚡
         ctgan = CTGAN(
             epochs=epochs,
             verbose=False,
-            random_state=random_state,
         )
         ctgan.fit(df_minority, discrete_cols)
     
@@ -1161,7 +1161,7 @@ and any binary classification workflow ⚡
                 d_for_tests = pd.concat(
                     [X_bal, y_bal.rename("target")], axis=1
                 )
-                st.caption("Using GAN-balanced dataset for t-tests & stepwise (placeholder, no real GAN yet).")
+                st.caption("Using GAN-balanced dataset for t-tests & stepwise.")
 
             else:
                 # No balancing; use the original dataset
