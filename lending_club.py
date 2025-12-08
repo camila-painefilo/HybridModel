@@ -24,6 +24,9 @@ def main():
     from imblearn.over_sampling import SMOTE
     from sklearn.metrics import precision_score, recall_score
 
+    # ✅ GAN library (only loaded when the app actually runs)
+    from ctgan import CTGAN   # or CTGANSynthesizer depending on your version
+
 
     # -------------------- Page & Theme --------------------
     st.set_page_config(page_title="Hybrid Model Agent", page_icon="💳", layout="wide")
