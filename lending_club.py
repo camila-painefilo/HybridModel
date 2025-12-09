@@ -1616,7 +1616,6 @@ and any binary classification workflow ⚡
                     st.dataframe(summary, use_container_width=True)
     
                     # Visualization
-                    import altair as alt
                     chart = (
                         alt.Chart(summary)
                         .mark_bar()
