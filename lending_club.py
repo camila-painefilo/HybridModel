@@ -23,6 +23,7 @@ def main():
     from pandas.api.types import is_numeric_dtype
     from imblearn.over_sampling import SMOTE
     from sklearn.metrics import precision_score, recall_score
+    from sklearn.cluster import KMeans
 
     # ✅ GAN library (only loaded when the app actually runs)
     from ctgan import CTGAN   # or CTGANSynthesizer depending on your version
@@ -808,6 +809,7 @@ and any binary classification workflow ⚡
                 "⚖️ Class Balancing",
                 "📏 t-Tests & Stepwise",
                 "🔮 Prediction Models (Hybrid)",
+                "👥 Customer Segmentation",   
             ],
             index=0,
         )
@@ -1566,6 +1568,144 @@ and any binary classification workflow ⚡
                 st.info("Run a model first to apply balancing and see updated counts.")
 
         st.markdown('</div>', unsafe_allow_html=True)
+    # ==================== CUSTOMER SEGMENTATION PAGE ====================
+elif page == "👥 Customer Segmentation":
+    st.subheader("👥 Customer Segmentation")
+
+    if df.empty:
+        st.info("Please upload a dataset first.")
+        st.stop()
+
+    tab1, tab2 = st.tabs(["📊 General segmentation", "💰 Risk × Value Segmentation"])
+
+    # ----------------------------------------------------
+    # TAB 1 — General segmentation (Before prediction)
+    # ----------------------------------------------------
+    with tab1:
+        st.markdown("### 📊 General Segmentation (Demographic / Categorical)")
+        st.caption("Use this to explore churn patterns across customer groups (gender, contract type, region, etc.).")
+
+        # Select categorical variables only
+        cat_cols = [
+            c for c in df.columns
+            if df[c].dtype == "object" or df[c].nunique() <= 20
+        ]
+
+        if not cat_cols:
+            st.info("No suitable categorical variables found for segmentation.")
+        else:
+            seg_var = st.selectbox("Select segmentation variable:", cat_cols)
+
+            if "target" not in df.columns:
+                st.warning("A binary 'target' column is required to calculate churn rates.")
+            else:
+                temp = df.copy()
+                temp["target_num"] = pd.to_numeric(temp["target"], errors="coerce")
+
+                summary = (
+                    temp.groupby(seg_var)
+                    .agg(
+                        n_customers=("target_num", "size"),
+                        churn_rate=("target_num", "mean"),
+                    )
+                    .reset_index()
+                )
+                summary["churn_rate (%)"] = (summary["churn_rate"] * 100).round(2)
+
+                st.dataframe(summary, use_container_width=True)
+
+                # Visualization
+                import altair as alt
+                chart = (
+                    alt.Chart(summary)
+                    .mark_bar()
+                    .encode(
+                        x=seg_var + ":N",
+                        y="churn_rate (%):Q",
+                        tooltip=[seg_var, "n_customers", "churn_rate (%)"],
+                    )
+                    .properties(height=350)
+                )
+                st.altair_chart(chart, use_container_width=True)
+
+    # ----------------------------------------------------
+    # TAB 2 — Risk × Value segmentation (After prediction)
+    # ----------------------------------------------------
+    with tab2:
+        st.markdown("### 💰 Risk × Value Segmentation")
+        st.caption(
+            "This requires a **predicted churn probability** column from a model.\n"
+            "Once the model runs, we will automatically store the predictions."
+        )
+
+        if "segmentation_df" not in st.session_state:
+            st.info("Run a prediction model to activate this tab.")
+            st.stop()
+
+        seg_df = st.session_state["segmentation_df"].copy()
+
+        if "churn_proba" not in seg_df.columns:
+            st.warning("No churn probability found. Please re-run prediction.")
+            st.stop()
+
+        # Choose value variable
+        num_cols = [
+            c for c in seg_df.columns
+            if seg_df[c].dtype != "object" and c not in ["target", "churn_proba"]
+        ]
+        if not num_cols:
+            st.info("No numeric value columns available.")
+            st.stop()
+
+        value_col = st.selectbox("Select customer value metric:", num_cols)
+
+        # Split into High / Low value (median)
+        median_val = seg_df[value_col].median()
+        seg_df["Value Segment"] = seg_df[value_col].apply(
+            lambda x: "High Value" if x >= median_val else "Low Value"
+        )
+
+        # Define risk buckets
+        low_thr, high_thr = st.slider(
+            "Risk thresholds (based on churn probability)",
+            0.0, 1.0, (0.3, 0.7), 0.05
+        )
+
+        def risk_bucket(p):
+            if p < low_thr:
+                return "Low Risk"
+            elif p < high_thr:
+                return "Medium Risk"
+            else:
+                return "High Risk"
+
+        seg_df["Risk Segment"] = seg_df["churn_proba"].apply(risk_bucket)
+
+        # Build Risk x Value Matrix
+        matrix = (
+            seg_df.groupby(["Risk Segment", "Value Segment"])
+            .agg(
+                customers=("target", "size"),
+                avg_value=(value_col, "mean"),
+                avg_risk=("churn_proba", "mean")
+            )
+            .reset_index()
+        )
+
+        matrix["avg_risk (%)"] = (matrix["avg_risk"] * 100).round(1)
+        matrix["avg_value"] = matrix["avg_value"].round(2)
+
+        st.dataframe(matrix, use_container_width=True)
+
+        st.markdown("""
+        ### Interpretation
+        - 🔴 **High Risk + High Value** → Priority retention group  
+        - 🟠 **High Risk + Low Value** → Retain if cost-efficient  
+        - 🟡 **Medium Risk + High Value** → Monitor, cross-sell  
+        - 🟢 **Low Risk + High Value** → Loyalty programs  
+        - ⚪ **Low Risk + Low Value** → Low priority  
+        """)
+
 
     # ========== Prediction Models ==========
 
@@ -1661,6 +1801,10 @@ and any binary classification workflow ⚡
 
                     probs_logit = logit_pipe.predict_proba(X_test)[:, 1]
                     preds_logit = (probs_logit >= 0.5).astype(int)
+                    seg_df = df.loc[X_test.index].copy()
+                    seg_df["churn_proba"] = probs_logit
+                    seg_df["predicted_label"] = preds_logit
+                    st.session_state["segmentation_df"] = seg_df
                     auc_logit = roc_auc_score(y_test, probs_logit)
                     acc_logit = accuracy_score(y_test, preds_logit)
                     f1_logit = f1_score(y_test, preds_logit)
@@ -1894,6 +2038,8 @@ and any binary classification workflow ⚡
                     st.info("Run at least one model to see comparison metrics.")
 
         st.markdown('</div>', unsafe_allow_html=True)
+
+
 
     # -------------------- Footer --------------------
     st.write("")
