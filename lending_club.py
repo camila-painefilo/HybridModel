@@ -1762,13 +1762,30 @@ and any binary classification workflow ⚡
                     st.metric("Target = 1 Rate (%)", f"{target_rate_model:.2f}%")
     
                 # ⭐ Use balanced dataset IF it already exists (applied in ⚖️ Class Balancing)
+                # ⭐ Use balanced dataset IF it already exists (applied in ⚖️ Class Balancing)
                 if "X_balanced" in st.session_state and "y_balanced" in st.session_state:
-                    X_train_model = st.session_state["X_balanced"]
-                    y_train_model = st.session_state["y_balanced"]
-                    st.success("Using globally balanced dataset from ⚖️ Class Balancing.")
+                    X_bal = st.session_state["X_balanced"].copy()
+                    y_bal = st.session_state["y_balanced"].copy()
+                
+                    # Ensure we use the SAME features (and order) as in used_feats
+                    missing = [f for f in used_feats if f not in X_bal.columns]
+                
+                    if missing:
+                        st.warning(
+                            "Balanced dataset is missing some selected features: "
+                            + ", ".join(missing)
+                            + ". Falling back to original (unbalanced) TRAIN split."
+                        )
+                        X_train_model, y_train_model = X_train, y_train
+                    else:
+                        # Align columns to used_feats → same names & order as X_test
+                        X_train_model = X_bal[used_feats].copy()
+                        y_train_model = y_bal.copy()
+                        st.success("Using globally balanced dataset from ⚖️ Class Balancing (columns aligned).")
                 else:
                     X_train_model, y_train_model = X_train, y_train
                     st.info("Using original (unbalanced) TRAIN split.")
+                
 
 
                 # ----------------- A. Baseline Logit -----------------
