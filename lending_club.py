@@ -756,11 +756,28 @@ and any binary classification workflow ⚡
                     max_rows_for_gan, random_state=random_state
                 ).reset_index(drop=True)
     
-            # ---------- 3. Detect discrete columns ----------
+            # ---------- 3. Prepare data for CTGAN ----------
+            # ❗ NO usar 'target' como input del GAN
+            df_gan = df_minority.drop(columns=["target"]).copy()
+    
+            # a) Drop constant columns (nunique <= 1) → suelen romper CTGAN
+            constant_cols = [
+                c for c in df_gan.columns
+                if df_gan[c].nunique(dropna=True) <= 1
+            ]
+            if constant_cols:
+                print(f"[gan_oversample] Dropping constant columns for CTGAN: {constant_cols}")
+                df_gan = df_gan.drop(columns=constant_cols)
+    
+            if df_gan.shape[1] == 0:
+                # No features left → no GAN
+                return X, y
+    
+            # b) Detect discrete columns (al menos 2 categorías, no demasiadas)
             discrete_cols = []
-            for col in df_minority.columns:
-                nunique = df_minority[col].nunique(dropna=True)
-                if nunique <= max_discrete_card:
+            for col in df_gan.columns:
+                nunique = df_gan[col].nunique(dropna=True)
+                if 2 <= nunique <= max_discrete_card:
                     discrete_cols.append(col)
     
             # ---------- 4. Set seeds ----------
@@ -772,17 +789,21 @@ and any binary classification workflow ⚡
                 pass
     
             # ---------- 5. Train CTGAN ----------
+            # Si quieres hacerlo más ligero, baja epochs a 10–15.
             ctgan = CTGAN(
                 epochs=epochs,
                 verbose=False,
             )
-            ctgan.fit(df_minority, discrete_cols)
+            ctgan.fit(df_gan, discrete_cols)
     
             # ---------- 6. Sample synthetic data ----------
-            synth_minority = ctgan.sample(n_to_generate)
-            synth_minority["target"] = min_cls
+            synth_features = ctgan.sample(n_to_generate)
+            synth_features["target"] = min_cls  # fijamos la clase minoritaria
     
-            df_balanced = pd.concat([df_all, synth_minority], ignore_index=True)
+            df_balanced = pd.concat(
+                [df_all, synth_features],
+                ignore_index=True
+            )
             df_balanced = df_balanced.sample(
                 frac=1.0, random_state=random_state
             ).reset_index(drop=True)
@@ -807,6 +828,7 @@ and any binary classification workflow ⚡
             # If anything fails, print to server logs and fall back gracefully
             print(f"[gan_oversample] Error during CTGAN training/sampling: {e}")
             return X, y
+
 
 
 
