@@ -186,19 +186,25 @@ and any binary classification workflow ⚡
         "Values not selected in either group will be ignored in modeling."
     )
 
-    bad_labels = st.multiselect(
-        "BAD class values (target = 1):",
-        options=sorted(labels),
-        default=sorted(default_bad_labels),
-        help="Choose values that represent default, churn, bad loans, etc."
-    )
-
-    good_labels = st.multiselect(
-        "GOOD class values (target = 0):",
-        options=sorted(labels),
-        default=sorted(default_good_labels),
-        help="Choose values that represent fully paid, retained customers, etc."
-    )
+    col_bad, col_good = st.columns(2)
+    
+    with col_bad:
+        bad_labels = st.multiselect(
+            "BAD class values (target = 1):",
+            options=sorted(labels),
+            default=sorted(default_bad_labels),
+            help="Choose values that represent default, churn, bad loans, etc.",
+            key="bad_labels"
+        )
+    
+    with col_good:
+        good_labels = st.multiselect(
+            "GOOD class values (target = 0):",
+            options=sorted(labels),
+            default=sorted(default_good_labels),
+            help="Choose values that represent fully paid, retained customers, etc.",
+            key="good_labels"
+        )
 
     conflict = set(bad_labels) & set(good_labels)
     if conflict:
