@@ -257,30 +257,24 @@ and any binary classification workflow ⚡
 
     st.markdown("### Missing value handling (for model training)")
     
-    col_missing, col_slider = st.columns([1, 1])
+    missing_strategy = st.segmented_control(
+        "Strategy",
+        options=[
+            "Impute with mean",
+            "Impute with 0",
+            "Drop rows with missing values"
+        ],
+        default="Impute with mean",
+    )
     
-    with col_missing:
-        missing_strategy = st.radio(
-            "Strategy",
-            options=["Impute with mean", "Impute with 0", "Drop rows with missing values"],
-            index=0,
-            horizontal=False,
-            help="How missing values will be handled during model training.",
-            key="missing_strategy",
-        )
-    
-    with col_slider:
-        max_missing_pct = st.slider(
-            "Maximum allowed missing rate per variable (%)",
-            min_value=0,
-            max_value=100,
-            value=50,
-            step=5,
-            help="Variables with a higher percentage of missing values will be excluded from modeling.",
-            key="max_missing_pct",
-        )
-    
-    st.write("")
+    max_missing_pct = st.slider(
+        "Maximum allowed missing rate per variable (%)",
+        min_value=0,
+        max_value=100,
+        value=50,
+        step=5,
+        help="Variables with a higher percentage of missing values will be excluded from modeling.",
+    )
 
 
 
