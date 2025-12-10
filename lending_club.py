@@ -1640,10 +1640,11 @@ and any binary classification workflow ⚡
                 st.warning("SMOTE will generate synthetic samples for the minority class in the **train** set.")
             elif method == "GAN":
                 st.warning(
-                    "GAN-based oversampling will generate synthetic samples for the minority class "
-                    "in the **train** set (experimental method, currently a placeholder)."
-                )
-
+                        "CTGAN-based oversampling is applied to the minority class in the training set "
+                        "(30 epochs, discrete features ≤ 20 categories, max 5,000 real samples, "
+                        "max 10,000 synthetic samples). Constant features and the target are excluded. "
+                        "Post-processing is done via numeric sanitization and median imputation."
+                    )
 
             st.divider()
 
