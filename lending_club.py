@@ -498,8 +498,11 @@ and any binary classification workflow ⚡
             df[c] = df[c].astype(int)
     
         # ---- 2) Convert easy binary categoricals to 0/1 ----
-        cat_cols = df.select_dtypes(include=["object", "category"]).columns.tolist()
-    
+        cat_cols = [
+            c for c in df.select_dtypes(include=["object", "category"]).columns
+            if c != "target"
+        ]
+
         for c in cat_cols:
             if c == "target":
                 continue
