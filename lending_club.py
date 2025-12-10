@@ -493,7 +493,11 @@ and any binary classification workflow ⚡
         df = df_in.copy()
     
         # ---- 1) Convert boolean columns to 0/1 ----
-        bool_cols = df.select_dtypes(include=["bool"]).columns.tolist()
+        bool_cols = [
+            c for c in df.select_dtypes(include=["bool"]).columns
+            if c != "target"
+        ]
+
         for c in bool_cols:
             df[c] = df[c].astype(int)
     
