@@ -473,16 +473,79 @@ and any binary classification workflow ⚡
 
     # build modeling matrix helper
     def build_model_matrix(df_in: pd.DataFrame) -> pd.DataFrame:
+        """
+        Build the modeling matrix used by:
+        - ⚖️ Class Balancing
+        - 📏 t-Tests & Stepwise
+        - 🔮 Prediction Models
+    
+        It:
+        1) Converts easy binary categoricals (yes/no, y/n, 1/0) to 0/1.
+        2) Converts boolean columns to 0/1.
+        3) Keeps only numeric predictors + 'target'.
+        4) Applies missing-value handling.
+        5) Keeps rows where target is 0/1.
+        """
         if "target" not in df_in.columns:
             return pd.DataFrame()
-        num_cols = [c for c in df_in.select_dtypes(include=[np.number]).columns if c != "target"]
+    
+        # ✅ Work on a copy so EDA/graphs are NOT affected
+        df = df_in.copy()
+    
+        # ---- 1) Convert boolean columns to 0/1 ----
+        bool_cols = df.select_dtypes(include=["bool"]).columns.tolist()
+        for c in bool_cols:
+            df[c] = df[c].astype(int)
+    
+        # ---- 2) Convert easy binary categoricals to 0/1 ----
+        cat_cols = df.select_dtypes(include=["object", "category"]).columns.tolist()
+    
+        for c in cat_cols:
+            if c == "target":
+                continue
+    
+            vals = df[c].dropna().unique()
+            if len(vals) == 0 or len(vals) > 2:
+                continue  # not binary → ignore
+    
+            norm_vals = {str(v).strip().lower() for v in vals}
+    
+            if norm_vals.issubset({"yes", "no"}):
+                df[c] = (
+                    df[c].astype(str)
+                    .str.strip().str.lower()
+                    .map({"yes": 1, "no": 0})
+                )
+            elif norm_vals.issubset({"y", "n"}):
+                df[c] = (
+                    df[c].astype(str)
+                    .str.strip().str.lower()
+                    .map({"y": 1, "n": 0})
+                )
+            elif norm_vals.issubset({"1", "0"}):
+                df[c] = (
+                    df[c].astype(str)
+                    .str.strip()
+                    .map({"1": 1, "0": 0})
+                )
+            # else: leave as-is (will be ignored later)
+    
+        # ---- 3) Select numeric predictors ----
+        num_cols = [
+            c for c in df.select_dtypes(include=[np.number]).columns
+            if c != "target"
+        ]
         if not num_cols:
             return pd.DataFrame()
-        miss_pct = df_in[num_cols].isna().mean() * 100
+    
+        miss_pct = df[num_cols].isna().mean() * 100
         keep_cols = miss_pct[miss_pct <= max_missing_pct].index.tolist()
         if not keep_cols:
             return pd.DataFrame()
-        d = df_in[["target"] + keep_cols].copy()
+    
+        d = df[["target"] + keep_cols].copy()
+    
+        # ---- 4) Missing-value strategy ----
         if missing_strategy == "Impute with mean":
             for c in keep_cols:
                 d[c] = d[c].fillna(d[c].mean())
@@ -490,9 +553,13 @@ and any binary classification workflow ⚡
             d[keep_cols] = d[keep_cols].fillna(0)
         else:
             d = d.dropna(subset=keep_cols)
+    
+        # ---- 5) Clean target ----
         d["target"] = pd.to_numeric(d["target"], errors="coerce")
         d = d[d["target"].isin([0, 1])]
+    
         return d
+
 
     def tree_select_features(X_train, y_train, max_features=15, random_state=42):
         tree = DecisionTreeClassifier(
