@@ -1641,10 +1641,11 @@ and any binary classification workflow ⚡
             elif method == "GAN":
                 st.warning(
                     "CTGAN-based oversampling is applied to the minority class.\n\n"
-                    "• Training: 30 epochs\n"
-                    "• Architecture: Generator and Discriminator with 2 hidden layers of 256 neurons each\n"
-                    "• Discrete features: ≤ 20 categories\n"
-                    "• Data limits: max 5,000 real samples and 10,000 synthetic samples\n\n"
+                    "Training configuration:\n"
+                    "- Epochs: 30\n"
+                    "- Architecture: Generator and Discriminator with 2 hidden layers of 256 neurons each\n"
+                    "- Discrete features: ≤ 20 categories\n"
+                    "- Data limits: max 5,000 real samples and 10,000 synthetic samples\n\n"
                     "The target and constant features are excluded, and outputs are numerically sanitized "
                     "with median imputation."
                 )
