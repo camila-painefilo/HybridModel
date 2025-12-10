@@ -1694,7 +1694,7 @@ and any binary classification workflow ⚡
 
         st.markdown('</div>', unsafe_allow_html=True)
         
-    # ==================== CUSTOMER SEGMENTATION PAGE ====================
+       # ==================== CUSTOMER SEGMENTATION PAGE ====================
     elif page == "👥 Customer Segmentation":
         st.subheader("👥 Customer Segmentation")
     
@@ -1705,53 +1705,99 @@ and any binary classification workflow ⚡
         tab1, tab2 = st.tabs(["📊 General segmentation", "💰 Risk × Value Segmentation"])
     
         # ----------------------------------------------------
+        # Helper: choose good segmentation variables
+        # ----------------------------------------------------
+        def get_segmentation_vars(df_in: pd.DataFrame):
+            """
+            Return a list of variables that make sense for segmentation:
+            - exclude almost-unique columns (IDs, indexes, etc.)
+            - exclude constants
+            - exclude obvious model columns (target, churn_proba, predicted_label)
+            - keep categorical / low-cardinality numeric variables
+            Works for any dataset.
+            """
+            seg_vars = []
+            n = len(df_in)
+    
+            for c in df_in.columns:
+                col = df_in[c]
+                col_name = c.lower()
+                uniq = col.nunique(dropna=True)
+    
+                # 1) Skip constants
+                if uniq <= 1:
+                    continue
+    
+                # 2) Skip almost-unique columns (IDs, timestamps, etc.)
+                if uniq > 0.9 * n:
+                    continue
+    
+                # 3) Skip obvious model columns
+                if col_name in ["target", "churn", "label"] or col_name in ["churn_proba", "predicted_label"]:
+                    continue
+    
+                # 4) Keep categorical or low-cardinality numeric
+                if col.dtype == "object" or str(col.dtype).startswith("category") or uniq <= 20:
+                    seg_vars.append(c)
+    
+            return seg_vars
+    
+        # ----------------------------------------------------
         # TAB 1 — General segmentation (Before prediction)
         # ----------------------------------------------------
         with tab1:
             st.markdown("### 📊 General Segmentation (Demographic / Categorical)")
-            st.caption("Use this to explore churn patterns across customer groups (gender, contract type, region, etc.).")
+            st.caption(
+                "Use this to compare churn rates across customer groups "
+                "(for example: by contract type, internet service, gender, region, etc.)."
+            )
     
-            # Select categorical variables only
-            cat_cols = [
-                c for c in df.columns
-                if df[c].dtype == "object" or df[c].nunique() <= 20
-            ]
+            cat_cols = get_segmentation_vars(df)
     
             if not cat_cols:
-                st.info("No suitable categorical variables found for segmentation.")
+                st.info("No suitable variables found for segmentation.")
             else:
-                seg_var = st.selectbox("Select segmentation variable:", cat_cols)
+                seg_vars = st.multiselect(
+                    "Select segmentation variable(s):",
+                    options=cat_cols,
+                    help="Choose one or more variables to compare customer groups.",
+                )
     
-                if "target" not in df.columns:
+                if not seg_vars:
+                    st.info("Select at least one variable to see segmentation results.")
+                elif "target" not in df.columns:
                     st.warning("A binary 'target' column is required to calculate churn rates.")
                 else:
                     temp = df.copy()
                     temp["target_num"] = pd.to_numeric(temp["target"], errors="coerce")
     
-                    summary = (
-                        temp.groupby(seg_var)
-                        .agg(
-                            n_customers=("target_num", "size"),
-                            churn_rate=("target_num", "mean"),
-                        )
-                        .reset_index()
-                    )
-                    summary["churn_rate (%)"] = (summary["churn_rate"] * 100).round(2)
+                    for seg_var in seg_vars:
+                        st.markdown(f"#### Segmentation by **{seg_var}**")
     
-                    st.dataframe(summary, use_container_width=True)
-    
-                    # Visualization
-                    chart = (
-                        alt.Chart(summary)
-                        .mark_bar()
-                        .encode(
-                            x=seg_var + ":N",
-                            y="churn_rate (%):Q",
-                            tooltip=[seg_var, "n_customers", "churn_rate (%)"],
+                        summary = (
+                            temp.groupby(seg_var, dropna=False)
+                            .agg(
+                                n_customers=("target_num", "size"),
+                                churn_rate=("target_num", "mean"),
+                            )
+                            .reset_index()
                         )
-                        .properties(height=350)
-                    )
-                    st.altair_chart(chart, use_container_width=True)
+                        summary["churn_rate (%)"] = (summary["churn_rate"] * 100).round(2)
+    
+                        st.dataframe(summary, use_container_width=True)
+    
+                        # Visualization (slightly smaller)
+                        chart = (
+                            alt.Chart(summary)
+                            .mark_bar()
+                            .encode(
+                                x=seg_var + ":N",
+                                y="churn_rate (%):Q",
+                                tooltip=[seg_var, "n_customers", "churn_rate (%)"],
+                            )
+                            .properties(height=250)   # smaller graph
+                        )
+                        st.altair_chart(chart, use_container_width=True)
     
         # ----------------------------------------------------
         # TAB 2 — Risk × Value segmentation (After prediction)
@@ -1759,12 +1805,25 @@ and any binary classification workflow ⚡
         with tab2:
             st.markdown("### 💰 Risk × Value Segmentation")
             st.caption(
-                "This requires a **predicted churn probability** column from a model.\n"
-                "Once the model runs, we will automatically store the predictions."
+                "Goal of this tab: combine **how valuable** a customer is (Value) with "
+                "**how likely they are to churn** (Risk), so you know which groups "
+                "need attention first."
+            )
+    
+            st.markdown(
+                """
+                - **Value** = how important the customer is for the business  
+                  (for example: monthly charges, total revenue, account balance).  
+                - **Risk** = predicted probability that the customer will churn (leave).  
+                
+                By combining these, you get groups such as:  
+                - High Value & High Risk → customers you should save first  
+                - Low Value & Low Risk → customers that need the least attention  
+                """
             )
     
             if "segmentation_df" not in st.session_state:
-                st.info("Run a prediction model to activate this tab.")
+                st.info("Run a prediction model first to generate churn probabilities.")
                 st.stop()
     
             seg_df = st.session_state["segmentation_df"].copy()
@@ -1782,7 +1841,10 @@ and any binary classification workflow ⚡
                 st.info("No numeric value columns available.")
                 st.stop()
     
-            value_col = st.selectbox("Select customer value metric:", num_cols)
+            value_col = st.selectbox(
+                "Select customer value metric (e.g., MonthlyCharges, TotalCharges):",
+                num_cols,
+            )
     
             # Split into High / Low value (median)
             median_val = seg_df[value_col].median()
@@ -1793,7 +1855,10 @@ and any binary classification workflow ⚡
             # Define risk buckets
             low_thr, high_thr = st.slider(
                 "Risk thresholds (based on churn probability)",
-                0.0, 1.0, (0.3, 0.7), 0.05
+                0.0, 1.0, (0.3, 0.7), 0.05,
+                help="Customers below the first threshold are Low Risk, "
+                     "between thresholds are Medium Risk, and above the second "
+                     "threshold are High Risk.",
             )
     
             def risk_bucket(p):
@@ -1812,7 +1877,7 @@ and any binary classification workflow ⚡
                 .agg(
                     customers=("target", "size"),
                     avg_value=(value_col, "mean"),
-                    avg_risk=("churn_proba", "mean")
+                    avg_risk=("churn_proba", "mean"),
                 )
                 .reset_index()
             )
@@ -1822,15 +1887,31 @@ and any binary classification workflow ⚡
     
             st.dataframe(matrix, use_container_width=True)
     
-            st.markdown("""
-            ### Interpretation
-            - 🔴 **High Risk + High Value** → Priority retention group  
-            - 🟠 **High Risk + Low Value** → Retain if cost-efficient  
-            - 🟡 **Medium Risk + High Value** → Monitor, cross-sell  
-            - 🟢 **Low Risk + High Value** → Loyalty programs  
-            - ⚪ **Low Risk + Low Value** → Low priority  
-            """)
+            st.markdown(
+                """
+                ### What is the goal of this tab?
 
+                This tab answers one simple question:
+
+                **👉 “Which customers should we focus on first?”**
+
+                We look at each customer in two ways:
+
+                - **Value** = how important the customer is for the business  
+                  (for example: higher MonthlyCharges or TotalCharges).  
+                - **Risk** = how likely the customer is to churn (leave),  
+                  based on the predicted churn probability.
+
+                The table shows groups of customers by **Risk level** and **Value level**.
+                Use it to decide where to spend your time and budget:
+
+                - 🔴 **High Risk + High Value** → most important customers to save first  
+                - 🟠 **High Risk + Low Value** → save them only if it is not too expensive  
+                - 🟡 **Medium Risk + High Value** → watch them and offer small incentives  
+                - 🟢 **Low Risk + High Value** → good loyal customers → loyalty / upsell programs  
+                - ⚪ **Low Risk + Low Value** → lowest priority group  
+                """
+            )
 
     # ========== Prediction Models ==========
 
