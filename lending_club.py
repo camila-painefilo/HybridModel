@@ -479,41 +479,39 @@ and any binary classification workflow ⚡
         - 📏 t-Tests & Stepwise
         - 🔮 Prediction Models
     
-        It:
-        1) Converts easy binary categoricals (yes/no, y/n, 1/0) to 0/1.
-        2) Converts boolean columns to 0/1.
-        3) Keeps only numeric predictors + 'target'.
-        4) Applies missing-value handling.
-        5) Keeps rows where target is 0/1.
+        1) Convierte categóricas binarias simples (yes/no, y/n, 1/0) a 0/1.
+        2) Convierte booleanas a 0/1.
+        3) Toma solo predictores numéricos (excluyendo 'target' y la columna objetivo original).
+        4) Maneja missing values.
+        5) Deja solo filas con target en {0,1}.
         """
         if "target" not in df_in.columns:
             return pd.DataFrame()
     
-        # ✅ Work on a copy so EDA/graphs are NOT affected
+        # Trabajamos sobre una copia (EDA/plots siguen viendo el df original)
         df = df_in.copy()
     
-        # ---- 1) Convert boolean columns to 0/1 ----
+        # ❗ columnas que nunca deben ser usadas como predictores
+        exclude_cols = {"target", target_col}
+    
+        # ---- 1) Booleanas → 0/1 (excluyendo target y target_col) ----
         bool_cols = [
             c for c in df.select_dtypes(include=["bool"]).columns
-            if c != "target"
+            if c not in exclude_cols
         ]
-
         for c in bool_cols:
             df[c] = df[c].astype(int)
     
-        # ---- 2) Convert easy binary categoricals to 0/1 ----
+        # ---- 2) Categóricas binarias simples → 0/1 (excluyendo target y target_col) ----
         cat_cols = [
             c for c in df.select_dtypes(include=["object", "category"]).columns
-            if c != "target"
+            if c not in exclude_cols
         ]
-
-        for c in cat_cols:
-            if c == "target":
-                continue
     
+        for c in cat_cols:
             vals = df[c].dropna().unique()
             if len(vals) == 0 or len(vals) > 2:
-                continue  # not binary → ignore
+                continue  # no es binaria → ignorar
     
             norm_vals = {str(v).strip().lower() for v in vals}
     
@@ -535,16 +533,17 @@ and any binary classification workflow ⚡
                     .str.strip()
                     .map({"1": 1, "0": 0})
                 )
-            # else: leave as-is (will be ignored later)
+            # si no cae en estos casos, se queda como está y luego se ignora
     
-        # ---- 3) Select numeric predictors ----
+        # ---- 3) Seleccionar numéricas como predictores (excluyendo target & target_col) ----
         num_cols = [
             c for c in df.select_dtypes(include=[np.number]).columns
-            if c != "target"
+            if c not in exclude_cols
         ]
         if not num_cols:
             return pd.DataFrame()
     
+        # ---- 4) Filtrar por porcentaje de missing ----
         miss_pct = df[num_cols].isna().mean() * 100
         keep_cols = miss_pct[miss_pct <= max_missing_pct].index.tolist()
         if not keep_cols:
@@ -552,20 +551,21 @@ and any binary classification workflow ⚡
     
         d = df[["target"] + keep_cols].copy()
     
-        # ---- 4) Missing-value strategy ----
+        # ---- 5) Estrategia de missing ----
         if missing_strategy == "Impute with mean":
             for c in keep_cols:
                 d[c] = d[c].fillna(d[c].mean())
         elif missing_strategy == "Impute with 0":
             d[keep_cols] = d[keep_cols].fillna(0)
-        else:
+        else:  # "Drop rows with missing values"
             d = d.dropna(subset=keep_cols)
     
-        # ---- 5) Clean target ----
+        # ---- 6) Limpiar target ----
         d["target"] = pd.to_numeric(d["target"], errors="coerce")
         d = d[d["target"].isin([0, 1])]
     
         return d
+
 
 
     def tree_select_features(X_train, y_train, max_features=15, random_state=42):
