@@ -291,7 +291,7 @@ and any binary classification workflow ⚡
      # -------------------- Filters (under Analysis settings) --------------------
     st.markdown('<div class="card">', unsafe_allow_html=True)
     st.markdown("### Filters")
-
+    
     # 1) Detect possible date-like columns
     date_candidates = []
     for c in df_full.columns:
@@ -303,25 +303,37 @@ and any binary classification workflow ⚡
             col_lower = c.lower()
             if any(key in col_lower for key in ["date", "time", "issue", "pymnt", "pay", "earliest", "last"]):
                 date_candidates.append(c)
-
+    
     date_candidates = sorted(set(date_candidates))
-
-    # 2) Let the user choose a date column manually
+    
+    # 2) Let the user choose a date column manually (title left, selector right)
     date_col_choice = None
-    if date_candidates:
-        date_col_choice = st.selectbox(
-            "Select a date column to derive 'issue_year' (optional)",
-            options=["(None)"] + date_candidates,
-            index=0,
-            help="If selected, the system extracts the year and creates an 'issue_year' column."
+    col_text, col_select = st.columns([2, 3])
+    
+    with col_text:
+        st.markdown("**Extract year for charts (optional)**")
+        st.caption(
+            "Select a date column from which a year variable will be derived "
+            "for time-based visualizations (internally stored as 'issue_year')."
         )
+    
+    if date_candidates:
+        with col_select:
+            date_col_choice = st.selectbox(
+                "",
+                options=["(None)"] + date_candidates,
+                index=0,
+                label_visibility="collapsed",
+                help="A new year variable will be created from the selected date column and used in line charts."
+            )
     else:
-        st.caption("No date-like variables detected.")
-
+        with col_select:
+            st.caption("No date-like variables detected.")
+    
     # 3) Create issue_year using intelligent multi-format parsing
     if date_col_choice and date_col_choice != "(None)":
         raw_col = df_full[date_col_choice].astype(str).str.strip()
-
+    
         def is_good_parse(parsed):
             """Check if parsed dates are usable: enough valid & reasonable years."""
             if parsed.notna().sum() == 0:
@@ -332,24 +344,24 @@ and any binary classification workflow ⚡
                 return False
             median_year = years.median()
             return (valid_ratio_local >= 0.3) and (median_year >= 1950)
-
+    
         # Attempt 1: generic parsing
         parsed_dates = pd.to_datetime(raw_col, errors="coerce")
-
+    
         # Attempt 2: Lending Club style "Dec-17"
         if not is_good_parse(parsed_dates):
             parsed_dates = pd.to_datetime(raw_col, format="%b-%y", errors="coerce")
-
+    
         # Attempt 3: "Dec-2017"
         if not is_good_parse(parsed_dates):
             parsed_dates = pd.to_datetime(raw_col, format="%b-%Y", errors="coerce")
-
+    
         # Attempt 4: "16-mar" meaning 2016-Mar (yy-MMM)
         if not is_good_parse(parsed_dates):
             parsed_dates = pd.to_datetime(raw_col, format="%y-%b", errors="coerce")
-
+    
         valid_ratio = parsed_dates.notna().mean()
-
+    
         if is_good_parse(parsed_dates):
             df_full["issue_year"] = parsed_dates.dt.year
         else:
@@ -357,7 +369,7 @@ and any binary classification workflow ⚡
                 f"Column '{date_col_choice}' does not appear to be a valid date variable "
                 f"({valid_ratio*100:.1f}% valid dates)."
             )
-
+    
     # 4) Year filter (only appears if issue_year exists)
     year_range = None
     if "issue_year" in df_full.columns and df_full["issue_year"].notna().any():
@@ -371,19 +383,20 @@ and any binary classification workflow ⚡
                 year_range = None
             else:
                 year_range = st.slider(
-                    "Filter by Issue Year",
+                    "Filter by year (for charts)",
                     min_value=min_year,
                     max_value=max_year,
                     value=(min_year, max_year),
                 )
     else:
-        st.caption("No 'issue_year' detected — line charts will not use year grouping.")
-
+        st.caption("No year variable detected — line charts will not use yearly grouping.")
+    
     # 5) Other filters (placeholders)
     grade_sel = None
     term_sel = None
-
+    
     st.markdown('</div>', unsafe_allow_html=True)
+
 
     # -------------------- Apply Filters --------------------
     df = df_full.copy()
