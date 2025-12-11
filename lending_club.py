@@ -2121,11 +2121,34 @@ and any binary classification workflow ⚡
 
                 # ----------------- C. Hybrid Model -----------------
                 st.markdown("### C. Hybrid Model — Tree-selected Logistic Regression")
+                
                 st.caption(
                     "Step 1: Use a Decision Tree to find the most important features. "
                     "Step 2: Train a Logistic Regression only on those features."
                 )
-                
+                 # UI explanation for users (shown inside the app)
+                st.markdown(
+                    """
+                    The **Hybrid Model** in this dashboard works in **two steps**:
+        
+                    1. **Decision Tree → feature selection (Step 1)**  
+                       - A shallow Decision Tree is trained on the training data  
+                         (optionally after class balancing in the ⚖️ tab).  
+                       - From this tree we take the variables with non-zero importance.  
+                       - Only the top *K* features (controlled by the slider) are kept.
+        
+                    2. **Logistic Regression → final prediction (Step 2)**  
+                       - A Logistic Regression model is then trained **only on those selected features**.  
+                       - It outputs the final probability that the outcome is bad (`target = 1`).  
+                       - The decision tree is used *only* to choose features; its own predictions are
+                         not averaged or combined with logit.
+        
+                    👉 Therefore, this is a **hybrid (Tree → Logit) feature-selection approach**,  
+                    not a classical ensemble model. We combine:
+                    - the tree's ability to find important variables, and  
+                    - the logistic model's stable, interpretable coefficients and probabilities.
+                    """
+                )
                 max_allowed_feats = min(20, X.shape[1])
                 min_allowed_feats = min(3, max_allowed_feats)
                 
