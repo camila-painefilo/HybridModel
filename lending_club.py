@@ -1988,12 +1988,24 @@ and any binary classification workflow ⚡
             # 6) Show cluster summary table
             st.markdown("#### Cluster summary")
     
-            # Build aggregation dict for selected vars
+            # Build aggregation dict for selected vars (all numeric)
             agg_dict = {var: ["mean", "median"] for var in selected_vars}
+            
+            # Optional: include target only if present, but convert to numeric
             if "target" in seg_result.columns:
-                agg_dict["target"] = ["mean"]
-    
+                seg_result["target_num"] = pd.to_numeric(seg_result["target"], errors="coerce")
+                agg_dict["target_num"] = ["mean"]  # average churn/default rate per cluster
+            
             cluster_summary = seg_result.groupby("cluster_kmeans").agg(agg_dict)
+            
+            # Flatten multi-index columns
+            cluster_summary.columns = [
+                f"{col}_{stat}" if stat != "" else col
+                for col, stat in cluster_summary.columns
+            ]
+            cluster_summary = cluster_summary.reset_index().rename(
+                columns={"cluster_kmeans": "cluster"}
+            )
     
             # Flatten multi-index columns
             cluster_summary.columns = [
