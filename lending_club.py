@@ -1694,7 +1694,7 @@ and any binary classification workflow ⚡
 
         st.markdown('</div>', unsafe_allow_html=True)
         
-       # ==================== CUSTOMER SEGMENTATION PAGE ====================
+    # ==================== CUSTOMER SEGMENTATION PAGE ====================
     elif page == "👥 Customer Segmentation":
         st.subheader("👥 Customer Segmentation")
     
@@ -1702,7 +1702,12 @@ and any binary classification workflow ⚡
             st.info("Please upload a dataset first.")
             st.stop()
     
-        tab1, tab2 = st.tabs(["📊 General segmentation", "💰 Risk × Value Segmentation"])
+        # Now we have 3 tabs, adding K-means
+        tab1, tab2, tab3 = st.tabs([
+            "📊 General segmentation",
+            "💰 Risk × Value Segmentation",
+            "🔍 K-means Clustering"
+        ])
     
         # ----------------------------------------------------
         # Helper: choose good segmentation variables
@@ -1890,21 +1895,21 @@ and any binary classification workflow ⚡
             st.markdown(
                 """
                 ### What is the goal of this tab?
-
+    
                 This tab answers one simple question:
-
+    
                 **👉 “Which customers should we focus on first?”**
-
+    
                 We look at each customer in two ways:
-
+    
                 - **Value** = how important the customer is for the business  
                   (for example: higher MonthlyCharges or TotalCharges).  
                 - **Risk** = how likely the customer is to churn (leave),  
                   based on the predicted churn probability.
-
+    
                 The table shows groups of customers by **Risk level** and **Value level**.
                 Use it to decide where to spend your time and budget:
-
+    
                 - 🔴 **High Risk + High Value** → most important customers to save first  
                 - 🟠 **High Risk + Low Value** → save them only if it is not too expensive  
                 - 🟡 **Medium Risk + High Value** → watch them and offer small incentives  
@@ -1912,6 +1917,128 @@ and any binary classification workflow ⚡
                 - ⚪ **Low Risk + Low Value** → lowest priority group  
                 """
             )
+    
+        # ----------------------------------------------------
+        # TAB 3 — K-means Clustering (Unsupervised Segmentation)
+        # ----------------------------------------------------
+        with tab3:
+            st.markdown("### 🔍 K-means Customer Segmentation")
+            st.caption(
+                "Unsupervised clustering based on numeric variables to discover natural "
+                "customer groups (no labels needed)."
+            )
+    
+            # 1) Select numeric columns (excluding target-like columns)
+            num_cols_all = [
+                c for c in df.columns
+                if pd.api.types.is_numeric_dtype(df[c])
+                and c.lower() not in ["target", "churn", "label"]
+            ]
+    
+            if not num_cols_all:
+                st.info("No numeric variables available for clustering.")
+                st.stop()
+    
+            default_vars = num_cols_all[:6]  # first few as default
+            selected_vars = st.multiselect(
+                "Select variables to use for clustering:",
+                options=num_cols_all,
+                default=default_vars,
+                help="Choose numeric features that describe customers (e.g., age, income, balance, etc.)."
+            )
+    
+            if not selected_vars:
+                st.info("Select at least one variable for clustering.")
+                st.stop()
+    
+            # 2) Choose number of clusters K
+            k = st.slider(
+                "Number of clusters (K)",
+                min_value=2,
+                max_value=10,
+                value=4,
+                step=1,
+                help="K = number of customer segments you want to create."
+            )
+    
+            # 3) Prepare data (drop missing, scale)
+            data_cluster = df[selected_vars].copy().dropna()
+    
+            if data_cluster.empty:
+                st.info("No rows left after dropping missing values for the selected variables.")
+                st.stop()
+    
+            scaler = StandardScaler()
+            X_scaled = scaler.fit_transform(data_cluster)
+    
+            # 4) Fit K-means
+            kmeans = KMeans(
+                n_clusters=k,
+                random_state=42,
+                n_init=10
+            )
+            labels = kmeans.fit_predict(X_scaled)
+    
+            # 5) Attach cluster labels back to a copy of the original df
+            seg_result = df.loc[data_cluster.index].copy()
+            seg_result["cluster_kmeans"] = labels
+    
+            st.success(f"K-means clustering completed with K = {k} clusters.")
+    
+            # 6) Show cluster summary table
+            st.markdown("#### Cluster summary")
+    
+            # Build aggregation dict for selected vars
+            agg_dict = {var: ["mean", "median"] for var in selected_vars}
+            if "target" in seg_result.columns:
+                agg_dict["target"] = ["mean"]
+    
+            cluster_summary = seg_result.groupby("cluster_kmeans").agg(agg_dict)
+    
+            # Flatten multi-index columns
+            cluster_summary.columns = [
+                f"{col}_{stat}" if stat != "" else col
+                for col, stat in cluster_summary.columns
+            ]
+            cluster_summary = cluster_summary.reset_index().rename(
+                columns={"cluster_kmeans": "cluster"}
+            )
+    
+            st.dataframe(cluster_summary, use_container_width=True)
+    
+            # 7) Optional: visualize clusters in 2D
+            if len(selected_vars) >= 2:
+                st.markdown("#### Cluster visualization (2D scatter)")
+    
+                x_var = st.selectbox("X axis variable", selected_vars, index=0)
+                y_var = st.selectbox("Y axis variable", selected_vars, index=1)
+    
+                plot_df = seg_result[[x_var, y_var, "cluster_kmeans"]].copy()
+    
+                chart_clusters = (
+                    alt.Chart(plot_df)
+                    .mark_circle(size=40, opacity=0.7)
+                    .encode(
+                        x=alt.X(f"{x_var}:Q", title=x_var),
+                        y=alt.Y(f"{y_var}:Q", title=y_var),
+                        color=alt.Color("cluster_kmeans:N", title="Cluster"),
+                        tooltip=[x_var, y_var, "cluster_kmeans:N"],
+                    )
+                    .properties(height=350)
+                )
+                st.altair_chart(chart_clusters, use_container_width=True)
+    
+            st.markdown(
+                """
+                **How to interpret this:**
+                - Each cluster represents a group of customers with similar numeric profiles.
+                - Use the summary table to label them in business terms, for example:  
+                  - Cluster 0: high balance, low risk  
+                  - Cluster 1: low balance, high variability, etc.  
+                - If `target` is present, the mean target per cluster gives you a rough risk level.
+                """
+            )
+    
 
     # ========== Prediction Models ==========
 
