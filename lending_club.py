@@ -1695,223 +1695,425 @@ and any binary classification workflow ⚡
         st.markdown('</div>', unsafe_allow_html=True)
         
        # ==================== CUSTOMER SEGMENTATION PAGE ====================
-    elif page == "👥 Customer Segmentation":
-        st.subheader("👥 Customer Segmentation")
-    
-        if df.empty:
-            st.info("Please upload a dataset first.")
-            st.stop()
-    
-        tab1, tab2 = st.tabs(["📊 General segmentation", "💰 Risk × Value Segmentation"])
-    
-        # ----------------------------------------------------
-        # Helper: choose good segmentation variables
-        # ----------------------------------------------------
-        def get_segmentation_vars(df_in: pd.DataFrame):
-            """
-            Return a list of variables that make sense for segmentation:
-            - exclude almost-unique columns (IDs, indexes, etc.)
-            - exclude constants
-            - exclude obvious model columns (target, churn_proba, predicted_label)
-            - keep categorical / low-cardinality numeric variables
-            Works for any dataset.
-            """
-            seg_vars = []
-            n = len(df_in)
-    
-            for c in df_in.columns:
-                col = df_in[c]
-                col_name = c.lower()
-                uniq = col.nunique(dropna=True)
-    
-                # 1) Skip constants
-                if uniq <= 1:
-                    continue
-    
-                # 2) Skip almost-unique columns (IDs, timestamps, etc.)
-                if uniq > 0.9 * n:
-                    continue
-    
-                # 3) Skip obvious model columns
-                if col_name in ["target", "churn", "label"] or col_name in ["churn_proba", "predicted_label"]:
-                    continue
-    
-                # 4) Keep categorical or low-cardinality numeric
-                if col.dtype == "object" or str(col.dtype).startswith("category") or uniq <= 20:
-                    seg_vars.append(c)
-    
-            return seg_vars
-    
-        # ----------------------------------------------------
-        # TAB 1 — General segmentation (Before prediction)
-        # ----------------------------------------------------
-        with tab1:
-            st.markdown("### 📊 General Segmentation (Demographic / Categorical)")
-            st.caption(
-                "Use this to compare churn rates across customer groups "
-                "(for example: by contract type, internet service, gender, region, etc.)."
+elif page == "👥 Customer Segmentation":
+    st.subheader("👥 Customer Segmentation")
+
+    if df.empty:
+        st.info("Please upload a dataset first.")
+        st.stop()
+
+    # 🔹 Previously you had 2 tabs.
+    #    Now we add a 3rd one: K-Means Segmentation.
+    tab1, tab2, tab3 = st.tabs([
+        "📊 General segmentation",
+        "💰 Risk × Value Segmentation",
+        "🧩 K-Means Segmentation"
+    ])
+
+    # ----------------------------------------------------
+    # Helper: choose good segmentation variables
+    # ----------------------------------------------------
+    def get_segmentation_vars(df_in: pd.DataFrame):
+        """
+        Returns a list of variables that make sense for segmentation:
+
+        - Excludes almost-unique columns (IDs, indexes, etc.)
+        - Excludes constants
+        - Excludes obvious model columns (target, churn_proba, predicted_label)
+        - Keeps categorical / low-cardinality numeric variables
+
+        This helper is used in the 'General segmentation' tab.
+        """
+        seg_vars = []
+        n = len(df_in)
+
+        for c in df_in.columns:
+            col = df_in[c]
+            col_name = c.lower()
+            uniq = col.nunique(dropna=True)
+
+            # 1) Skip constants
+            if uniq <= 1:
+                continue
+
+            # 2) Skip almost-unique columns (IDs, timestamps, etc.)
+            if uniq > 0.9 * n:
+                continue
+
+            # 3) Skip obvious model columns
+            if col_name in ["target", "churn", "label"] or col_name in ["churn_proba", "predicted_label"]:
+                continue
+
+            # 4) Keep categorical or low-cardinality numeric
+            if col.dtype == "object" or str(col.dtype).startswith("category") or uniq <= 20:
+                seg_vars.append(c)
+
+        return seg_vars
+
+    # ----------------------------------------------------
+    # TAB 1 — General segmentation (Before prediction)
+    # ----------------------------------------------------
+    with tab1:
+        st.markdown("### 📊 General Segmentation (Demographic / Categorical)")
+        st.caption(
+            "Use this to compare churn or bad-outcome rates across customer groups "
+            "(for example: by contract type, internet service, gender, region, etc.)."
+        )
+
+        cat_cols = get_segmentation_vars(df)
+
+        if not cat_cols:
+            st.info("No suitable variables found for segmentation.")
+        else:
+            seg_vars = st.multiselect(
+                "Select segmentation variable(s):",
+                options=cat_cols,
+                help="Choose one or more variables to compare customer groups.",
             )
-    
-            cat_cols = get_segmentation_vars(df)
-    
-            if not cat_cols:
-                st.info("No suitable variables found for segmentation.")
+
+            if not seg_vars:
+                st.info("Select at least one variable to see segmentation results.")
+            elif "target" not in df.columns:
+                st.warning("A binary 'target' column is required to calculate bad-outcome rates.")
             else:
-                seg_vars = st.multiselect(
-                    "Select segmentation variable(s):",
-                    options=cat_cols,
-                    help="Choose one or more variables to compare customer groups.",
-                )
-    
-                if not seg_vars:
-                    st.info("Select at least one variable to see segmentation results.")
-                elif "target" not in df.columns:
-                    st.warning("A binary 'target' column is required to calculate churn rates.")
-                else:
-                    temp = df.copy()
-                    temp["target_num"] = pd.to_numeric(temp["target"], errors="coerce")
-    
-                    for seg_var in seg_vars:
-                        st.markdown(f"#### Segmentation by **{seg_var}**")
-    
-                        summary = (
-                            temp.groupby(seg_var, dropna=False)
-                            .agg(
-                                n_customers=("target_num", "size"),
-                                churn_rate=("target_num", "mean"),
-                            )
-                            .reset_index()
+                temp = df.copy()
+                temp["target_num"] = pd.to_numeric(temp["target"], errors="coerce")
+
+                for seg_var in seg_vars:
+                    st.markdown(f"#### Segmentation by **{seg_var}**")
+
+                    summary = (
+                        temp.groupby(seg_var, dropna=False)
+                        .agg(
+                            n_customers=("target_num", "size"),
+                            bad_rate=("target_num", "mean"),
                         )
-                        summary["churn_rate (%)"] = (summary["churn_rate"] * 100).round(2)
-    
-                        st.dataframe(summary, use_container_width=True)
-    
-                        # Visualization (slightly smaller)
-                        chart = (
-                            alt.Chart(summary)
-                            .mark_bar()
-                            .encode(
-                                x=seg_var + ":N",
-                                y="churn_rate (%):Q",
-                                tooltip=[seg_var, "n_customers", "churn_rate (%)"],
-                            )
-                            .properties(height=250)   # smaller graph
+                        .reset_index()
+                    )
+                    summary["bad_rate (%)"] = (summary["bad_rate"] * 100).round(2)
+
+                    st.dataframe(summary, use_container_width=True)
+
+                    chart = (
+                        alt.Chart(summary)
+                        .mark_bar()
+                        .encode(
+                            x=seg_var + ":N",
+                            y="bad_rate (%):Q",
+                            tooltip=[seg_var, "n_customers", "bad_rate (%)"],
                         )
-                        st.altair_chart(chart, use_container_width=True)
+                        .properties(height=250)
+                    )
+                    st.altair_chart(chart, use_container_width=True)
+
+    # ----------------------------------------------------
+    # TAB 2 — Risk × Value segmentation (After prediction)
+    # ----------------------------------------------------
+    with tab2:
+        st.markdown("### 💰 Risk × Value Segmentation")
+        st.caption(
+            "Goal of this tab: combine **how valuable** a customer is (Value) with "
+            "**how likely they are to churn / default** (Risk), so you know which groups "
+            "need attention first."
+        )
+
+        st.markdown(
+            """
+            - **Value** = how important the customer is for the business  
+              (for example: monthly charges, loan amount, account balance).  
+            - **Risk** = predicted probability that the customer will churn / default.  
+            
+            By combining these, we get groups like:  
+            - High Value & High Risk → customers you should save first  
+            - Low Value & High Risk → maybe do not spend too much budget  
+            - High Value & Low Risk → loyalty & upsell  
+            """
+        )
+
+        if "segmentation_df" not in st.session_state:
+            st.info("Run a prediction model first to generate probabilities for each customer.")
+            st.stop()
+
+        seg_df = st.session_state["segmentation_df"].copy()
+
+        if "churn_proba" not in seg_df.columns:
+            st.warning("No churn probability (churn_proba) found. Please re-run prediction.")
+            st.stop()
+
+        # Choose value variable
+        num_cols_rv = [
+            c for c in seg_df.columns
+            if seg_df[c].dtype != "object" and c not in ["target", "churn_proba"]
+        ]
+        if not num_cols_rv:
+            st.info("No numeric value columns available for Risk × Value segmentation.")
+            st.stop()
+
+        value_col = st.selectbox(
+            "Select customer value metric (e.g., MonthlyCharges, loan_amnt):",
+            num_cols_rv,
+        )
+
+        # Split into High / Low value (median)
+        median_val = seg_df[value_col].median()
+        seg_df["Value Segment"] = seg_df[value_col].apply(
+            lambda x: "High Value" if x >= median_val else "Low Value"
+        )
+
+        # Define risk buckets
+        low_thr, high_thr = st.slider(
+            "Risk thresholds (based on churn_proba)",
+            0.0, 1.0, (0.3, 0.7), 0.05,
+            help=(
+                "Customers below the first threshold are Low Risk, "
+                "between thresholds are Medium Risk, and above the second "
+                "threshold are High Risk."
+            ),
+        )
+
+        def risk_bucket(p):
+            if p < low_thr:
+                return "Low Risk"
+            elif p < high_thr:
+                return "Medium Risk"
+            else:
+                return "High Risk"
+
+        seg_df["Risk Segment"] = seg_df["churn_proba"].apply(risk_bucket)
+
+        # Build Risk × Value Matrix
+        matrix = (
+            seg_df.groupby(["Risk Segment", "Value Segment"])
+            .agg(
+                customers=("target", "size"),
+                avg_value=(value_col, "mean"),
+                avg_risk=("churn_proba", "mean"),
+            )
+            .reset_index()
+        )
+
+        matrix["avg_risk (%)"] = (matrix["avg_risk"] * 100).round(1)
+        matrix["avg_value"] = matrix["avg_value"].round(2)
+
+        st.dataframe(matrix, use_container_width=True)
+
+        st.markdown(
+            """
+            ### How to read this table:
+
+            - Each row is a combination of **Risk level** and **Value level**.  
+            - `customers` = how many customers fall into that box.  
+            - `avg_value` = their average value (e.g., average MonthlyCharges).  
+            - `avg_risk (%)` = their average churn / default probability.  
+            
+            Use it to decide **where to focus retention efforts**:
+            - 🔴 High Risk + High Value → top priority to retain  
+            - 🟠 High Risk + Low Value → retain only if cost-effective  
+            - 🟡 Medium Risk + High Value → monitor and offer mild incentives  
+            - 🟢 Low Risk + High Value → loyalty & upsell programs  
+            - ⚪ Low Risk + Low Value → lowest priority segment  
+            """
+        )
+
+        # ----------------------------------------------------
+        # TAB 3 — K-Means Customer Segmentation (NEW)
+        # ----------------------------------------------------
+        with tab3:
+            # 💡 Explanation (in code + on screen):
+            # K-Means is an **unsupervised** clustering method.
+            # It does NOT use 'target'; instead, it groups customers based on similarity
+            # in selected numeric variables (e.g., balance, income, utilization).
+            #
+            # Steps in this tab:
+            # 1. Choose numeric variables to describe customer behavior.
+            # 2. Standardize them (so different scales do not dominate).
+            # 3. Run K-Means to split customers into K segments.
+            # 4. Summarize and visualize each segment → manager can interpret segments
+            #    and design different strategies.
     
-        # ----------------------------------------------------
-        # TAB 2 — Risk × Value segmentation (After prediction)
-        # ----------------------------------------------------
-        with tab2:
-            st.markdown("### 💰 Risk × Value Segmentation")
+            st.markdown("### 🧩 K-Means Customer Segmentation")
             st.caption(
-                "Goal of this tab: combine **how valuable** a customer is (Value) with "
-                "**how likely they are to churn** (Risk), so you know which groups "
-                "need attention first."
+                "This tab uses **K-Means clustering** to automatically group customers "
+                "with similar patterns into K segments."
             )
     
             st.markdown(
                 """
-                - **Value** = how important the customer is for the business  
-                  (for example: monthly charges, total revenue, account balance).  
-                - **Risk** = predicted probability that the customer will churn (leave).  
-                
-                By combining these, you get groups such as:  
-                - High Value & High Risk → customers you should save first  
-                - Low Value & Low Risk → customers that need the least attention  
+                **What this does:**
+    
+                - Inputs: a few numeric customer variables (for example: loan amount, income, DTI…).  
+                - Output: K segments (0, 1, 2, …) where customers inside the same segment are similar.  
+                - Use it to describe **profiles** like “high income & low risk” vs. “low income & high utilization”.  
                 """
             )
     
-            if "segmentation_df" not in st.session_state:
-                st.info("Run a prediction model first to generate churn probabilities.")
-                st.stop()
-    
-            seg_df = st.session_state["segmentation_df"].copy()
-    
-            if "churn_proba" not in seg_df.columns:
-                st.warning("No churn probability found. Please re-run prediction.")
-                st.stop()
-    
-            # Choose value variable
-            num_cols = [
-                c for c in seg_df.columns
-                if seg_df[c].dtype != "object" and c not in ["target", "churn_proba"]
+            # 1) Select numeric variables to use in clustering
+            numeric_cols_all = [
+                c for c in df.columns
+                if is_numeric_dtype(df[c]) and c != "target"
             ]
-            if not num_cols:
-                st.info("No numeric value columns available.")
+    
+            if not numeric_cols_all:
+                st.info("No numeric variables available for K-Means clustering.")
                 st.stop()
     
-            value_col = st.selectbox(
-                "Select customer value metric (e.g., MonthlyCharges, TotalCharges):",
-                num_cols,
+            st.markdown("**1️⃣ Select numeric variables for clustering**")
+            default_km = [
+                c for c in ["loan_amnt", "int_rate", "annual_inc", "dti", "revol_bal"]
+                if c in numeric_cols_all
+            ]
+    
+            selected_features = st.multiselect(
+                "Choose 2–6 numeric columns that describe customer behavior:",
+                options=numeric_cols_all,
+                default=default_km if len(default_km) >= 2 else numeric_cols_all[:2],
             )
     
-            # Split into High / Low value (median)
-            median_val = seg_df[value_col].median()
-            seg_df["Value Segment"] = seg_df[value_col].apply(
-                lambda x: "High Value" if x >= median_val else "Low Value"
+            if len(selected_features) < 2:
+                st.warning("Please select at least **2** variables for K-Means.")
+                st.stop()
+    
+            # 2) Choose number of clusters K
+            st.markdown("**2️⃣ Choose number of segments (K)**")
+            k = st.slider(
+                "Number of K-Means clusters",
+                min_value=2,
+                max_value=8,
+                value=4,
+                help="K is the number of customer segments. Try 3–5 as a starting point.",
             )
     
-            # Define risk buckets
-            low_thr, high_thr = st.slider(
-                "Risk thresholds (based on churn probability)",
-                0.0, 1.0, (0.3, 0.7), 0.05,
-                help="Customers below the first threshold are Low Risk, "
-                     "between thresholds are Medium Risk, and above the second "
-                     "threshold are High Risk.",
+            # 3) Prepare data for K-Means
+            X = df[selected_features].dropna().copy()
+            if X.empty:
+                st.warning("No non-missing data for the selected variables.")
+                st.stop()
+    
+            # Save index to join back cluster labels
+            idx = X.index
+    
+            # Standardize variables so that all features contribute fairly
+            scaler = StandardScaler()
+            X_scaled = scaler.fit_transform(X)
+    
+            # 4) Run K-Means clustering
+            #    Algorithm idea:
+            #    - randomly initialize K centers
+            #    - assign each customer to closest center
+            #    - recompute centers as mean of assigned customers
+            #    - repeat until assignments stabilize
+            kmeans = KMeans(
+                n_clusters=k,
+                random_state=int(random_state),
+                n_init="auto"
+            )
+            cluster_labels = kmeans.fit_predict(X_scaled)
+    
+            # 5) Attach segment label back to full dataframe
+            df_km = df.copy()
+            df_km.loc[idx, "segment_kmeans"] = cluster_labels
+    
+            st.markdown(
+                "**3️⃣ Each customer now has a K-Means segment label (`segment_kmeans`)**"
+            )
+            st.dataframe(
+                df_km.loc[idx, ["segment_kmeans"] + selected_features].head(10),
+                use_container_width=True,
             )
     
-            def risk_bucket(p):
-                if p < low_thr:
-                    return "Low Risk"
-                elif p < high_thr:
-                    return "Medium Risk"
-                else:
-                    return "High Risk"
+            # Optionally save for later use in other tabs / export
+            st.session_state["kmeans_segmentation_df"] = df_km
     
-            seg_df["Risk Segment"] = seg_df["churn_proba"].apply(risk_bucket)
+            # 6) Build summary table for each segment
+            st.markdown("### 📌 Segment summary table")
     
-            # Build Risk x Value Matrix
-            matrix = (
-                seg_df.groupby(["Risk Segment", "Value Segment"])
-                .agg(
-                    customers=("target", "size"),
-                    avg_value=(value_col, "mean"),
-                    avg_risk=("churn_proba", "mean"),
-                )
+            agg_dict = {"segment_kmeans": "size"}
+            rename_dict = {"segment_kmeans": "customers"}
+    
+            # Add average of clustering variables
+            for col in selected_features:
+                agg_dict[col] = "mean"
+    
+            # If we also have a risk or value variable, include them
+            possible_value_cols = [
+                c for c in numeric_cols_all
+                if any(key in c.lower() for key in ["loan", "balance", "charge", "income"])
+            ]
+            possible_risk_cols = [
+                c for c in numeric_cols_all
+                if any(key in c.lower() for key in ["prob", "risk", "churn"])
+            ]
+    
+            value_col_km = possible_value_cols[0] if possible_value_cols else None
+            risk_col_km = possible_risk_cols[0] if possible_risk_cols else None
+    
+            if value_col_km:
+                agg_dict[value_col_km] = "mean"
+                rename_dict[value_col_km] = "avg_value"
+    
+            if risk_col_km:
+                agg_dict[risk_col_km] = "mean"
+                rename_dict[risk_col_km] = "avg_risk"
+    
+            seg_summary = (
+                df_km.dropna(subset=["segment_kmeans"])
+                .groupby("segment_kmeans")
+                .agg(agg_dict)
+                .rename(columns=rename_dict)
                 .reset_index()
+                .sort_values("segment_kmeans")
             )
     
-            matrix["avg_risk (%)"] = (matrix["avg_risk"] * 100).round(1)
-            matrix["avg_value"] = matrix["avg_value"].round(2)
-    
-            st.dataframe(matrix, use_container_width=True)
+            seg_summary = seg_summary.round(3)
+            st.dataframe(seg_summary, use_container_width=True)
     
             st.markdown(
                 """
-                ### What is the goal of this tab?
-
-                This tab answers one simple question:
-
-                **👉 “Which customers should we focus on first?”**
-
-                We look at each customer in two ways:
-
-                - **Value** = how important the customer is for the business  
-                  (for example: higher MonthlyCharges or TotalCharges).  
-                - **Risk** = how likely the customer is to churn (leave),  
-                  based on the predicted churn probability.
-
-                The table shows groups of customers by **Risk level** and **Value level**.
-                Use it to decide where to spend your time and budget:
-
-                - 🔴 **High Risk + High Value** → most important customers to save first  
-                - 🟠 **High Risk + Low Value** → save them only if it is not too expensive  
-                - 🟡 **Medium Risk + High Value** → watch them and offer small incentives  
-                - 🟢 **Low Risk + High Value** → good loyal customers → loyalty / upsell programs  
-                - ⚪ **Low Risk + Low Value** → lowest priority group  
+                **How to read this table:**
+    
+                - Each row = **one K-Means segment**.  
+                - `customers` = how many customers belong to that segment.  
+                - The averages of the selected variables show the **typical profile** of that segment.  
+                - If `avg_value` / `avg_risk` appear, you can see which segment is more valuable or more risky.  
                 """
             )
+    
+            # 7) 2D plot for visualization (first two selected variables)
+            st.markdown("### 🗺️ 2D visualization (first two variables)")
+    
+            if len(selected_features) >= 2:
+                x_var, y_var = selected_features[0], selected_features[1]
+                plot_df = df_km.loc[idx, ["segment_kmeans", x_var, y_var]].copy()
+    
+                chart = (
+                    alt.Chart(plot_df)
+                    .mark_circle(size=60, opacity=0.6)
+                    .encode(
+                        x=alt.X(x_var, title=x_var),
+                        y=alt.Y(y_var, title=y_var),
+                        color=alt.Color("segment_kmeans:N", title="Segment"),
+                        tooltip=["segment_kmeans", x_var, y_var],
+                    )
+                    .properties(height=320)
+                    .interactive()
+                )
+                st.altair_chart(chart, use_container_width=True)
+    
+            st.markdown(
+                """
+                **Interpretation example (for your report / presentation):**
+    
+                - Segment 0: maybe “low income, low balance, low risk” (basic customers).  
+                - Segment 1: maybe “high income, high balance, medium risk” (priority for retention).  
+                - Segment 2: maybe “medium income, high utilization, high risk” (need closer monitoring).  
+    
+                Exact interpretation depends on which variables you selected,
+                but the **logic** is:  
+                > customers in the same cluster have similar numeric profiles,
+                so we can design **different strategies** for each segment.
+                """
+            )
+
 
     # ========== Prediction Models ==========
 
