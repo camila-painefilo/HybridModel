@@ -1987,7 +1987,7 @@ and any binary classification workflow ⚡
     
             # 6) Show cluster summary table
             st.markdown("#### Cluster summary")
-    
+            
             # Build aggregation dict for selected vars (all numeric)
             agg_dict = {var: ["mean", "median"] for var in selected_vars}
             
@@ -1996,27 +1996,28 @@ and any binary classification workflow ⚡
                 seg_result["target_num"] = pd.to_numeric(seg_result["target"], errors="coerce")
                 agg_dict["target_num"] = ["mean"]  # average churn/default rate per cluster
             
+            # Group by cluster and aggregate
             cluster_summary = seg_result.groupby("cluster_kmeans").agg(agg_dict)
             
-            # Flatten multi-index columns
-            cluster_summary.columns = [
-                f"{col}_{stat}" if stat != "" else col
-                for col, stat in cluster_summary.columns
-            ]
+            # ---------- Robust column flattening ----------
+            import pandas as pd
+            
+            if isinstance(cluster_summary.columns, pd.MultiIndex):
+                cluster_summary.columns = [
+                    f"{col}_{stat}" if str(stat) != "" else str(col)
+                    for col, stat in cluster_summary.columns
+                ]
+            else:
+                # Already a simple Index
+                cluster_summary.columns = [str(c) for c in cluster_summary.columns]
+            
             cluster_summary = cluster_summary.reset_index().rename(
                 columns={"cluster_kmeans": "cluster"}
             )
-    
-            # Flatten multi-index columns
-            cluster_summary.columns = [
-                f"{col}_{stat}" if stat != "" else col
-                for col, stat in cluster_summary.columns
-            ]
-            cluster_summary = cluster_summary.reset_index().rename(
-                columns={"cluster_kmeans": "cluster"}
-            )
-    
+            # ------------------------------------------------
+            
             st.dataframe(cluster_summary, use_container_width=True)
+
     
             # 7) Optional: visualize clusters in 2D
             if len(selected_vars) >= 2:
