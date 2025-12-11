@@ -1696,7 +1696,7 @@ and any binary classification workflow ⚡
         
        # ==================== CUSTOMER SEGMENTATION PAGE ====================
     elif page == "👥 Customer Segmentation":
-            st.subheader("👥 Customer Segmentation")
+        st.subheader("👥 Customer Segmentation")
 
         if df.empty:
             st.info("Please upload a dataset first.")
