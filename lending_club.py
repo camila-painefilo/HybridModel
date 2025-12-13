@@ -1707,8 +1707,7 @@ and any binary classification workflow ⚡
        tab1, tab2, tab3 = st.tabs([
             "📊 General segmentation",
             "💰 Risk × Value Segmentation",
-            "🧩 K-Means Clustering"
-        ])
+            "🧩 K-Means Clustering"])
 
     
         # ----------------------------------------------------
