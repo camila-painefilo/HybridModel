@@ -78,15 +78,18 @@ def main():
     # -------------------- 💠 WELCOME PAGE --------------------
     if not st.session_state.welcome_done:
 
-        col1, col2, col3 = st.columns([1, 0.3, 2])
+        col1, col2, col3 = st.columns([2, 0.3, 1])
 
         with col1:
-            st.image("welcome_image.png", width=220)
-
-        with col3:
             st.markdown("## 💳 Welcome to the Hybrid Model Agent")
-            st.markdown(
-                """
+            st.markdown("""... your bullets ...""")
+            if st.button("🚀 Start the Analysis"):
+                st.session_state.welcome_done = True
+                st.rerun()
+        
+        with col3:
+            st.image("welcome_image.png", width=260)
+
 A flexible and intelligent platform for  
 - tabular data exploration 📊
 - statistical testing 📏
