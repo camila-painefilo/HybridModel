@@ -1704,9 +1704,12 @@ and any binary classification workflow ⚡
     
     
         
-        tab1, tab2 = st.tabs([
+       tab1, tab2, tab3 = st.tabs([
             "📊 General segmentation",
-            "💰 Risk × Value Segmentation" ])
+            "💰 Risk × Value Segmentation",
+            "🧩 K-Means Clustering"
+        ])
+
     
         # ----------------------------------------------------
         # Helper: choose good segmentation variables
@@ -1912,7 +1915,190 @@ and any binary classification workflow ⚡
                 - ⚪ Low Risk + Low Value → lowest priority segment  
                 """
             )
-    
+
+            # ----------------------------------------------------
+            # TAB 3 — K-Means clustering segmentation (Generic)
+            # ----------------------------------------------------
+            with tab3:
+                st.markdown("### 🧩 K-Means Clustering (Unsupervised Segmentation)")
+                st.caption(
+                    "This creates segments automatically based on similarity in selected features. "
+                    "No target is required. If 'target' exists, we will show bad_rate by cluster."
+                )
+            
+                # ---------- Helper: build clustering matrix (generic) ----------
+                def build_cluster_matrix(df_in: pd.DataFrame) -> pd.DataFrame:
+                    """
+                    Generic clustering dataset builder:
+                    - Converts bools to 0/1
+                    - Converts simple binary categoricals (yes/no, y/n, 1/0, true/false) to 0/1
+                    - Keeps only numeric predictors
+                    - Applies missing strategy from UI
+                    """
+                    d = df_in.copy()
+            
+                    exclude_cols = {"target", "churn_proba", "predicted_label"}
+            
+                    # 1) Bool -> 0/1
+                    bool_cols = [c for c in d.select_dtypes(include=["bool"]).columns if c not in exclude_cols]
+                    for c in bool_cols:
+                        d[c] = d[c].astype(int)
+            
+                    # 2) Simple binary categoricals -> 0/1
+                    cat_cols = [c for c in d.select_dtypes(include=["object", "category"]).columns if c not in exclude_cols]
+                    for c in cat_cols:
+                        vals = d[c].dropna().unique()
+                        if len(vals) != 2:
+                            continue
+            
+                        norm_vals = {str(v).strip().lower() for v in vals}
+            
+                        # common binary maps
+                        if norm_vals.issubset({"yes", "no"}):
+                            d[c] = d[c].astype(str).str.strip().str.lower().map({"yes": 1, "no": 0})
+                        elif norm_vals.issubset({"y", "n"}):
+                            d[c] = d[c].astype(str).str.strip().str.lower().map({"y": 1, "n": 0})
+                        elif norm_vals.issubset({"true", "false"}):
+                            d[c] = d[c].astype(str).str.strip().str.lower().map({"true": 1, "false": 0})
+                        elif norm_vals.issubset({"1", "0"}):
+                            d[c] = d[c].astype(str).str.strip().map({"1": 1, "0": 0})
+            
+                    # 3) Keep numeric columns only (exclude model columns)
+                    num_cols = [c for c in d.select_dtypes(include=[np.number]).columns if c not in exclude_cols]
+                    if not num_cols:
+                        return pd.DataFrame()
+            
+                    X = d[num_cols].copy()
+            
+                    # 4) Missing handling
+                    if missing_strategy_km == "Impute with mean":
+                        for c in X.columns:
+                            X[c] = X[c].fillna(X[c].mean())
+                    elif missing_strategy_km == "Impute with 0":
+                        X = X.fillna(0)
+                    else:
+                        X = X.dropna()
+            
+                    # also drop constant columns (can break clustering usefulness)
+                    nun = X.nunique(dropna=True)
+                    X = X.loc[:, nun > 1]
+            
+                    return X
+            
+                # ---------- UI controls ----------
+                cA, cB, cC = st.columns([1, 1, 2])
+                with cA:
+                    k = st.slider("K (number of clusters)", 2, 10, 4, 1)
+                with cB:
+                    scale = st.checkbox("Standardize features", value=True, help="Recommended for K-means.")
+                with cC:
+                    missing_strategy_km = st.selectbox(
+                        "Missing value handling (for clustering)",
+                        ["Impute with mean", "Impute with 0", "Drop rows with missing values"],
+                        index=0
+                    )
+            
+                # Build generic clustering matrix
+                X_all = build_cluster_matrix(df)
+            
+                if X_all.empty or X_all.shape[1] < 2:
+                    st.info("Not enough usable numeric/binary features for K-means (need at least 2).")
+                    st.stop()
+            
+                # User chooses which features to cluster on
+                default_feats = list(X_all.columns[: min(6, X_all.shape[1])])
+                cluster_feats = st.multiselect(
+                    "Choose features for clustering",
+                    options=list(X_all.columns),
+                    default=default_feats,
+                    help="Pick numeric/binary features. More features ≠ always better."
+                )
+            
+                if len(cluster_feats) < 2:
+                    st.info("Select at least 2 features.")
+                    st.stop()
+            
+                X_use = X_all[cluster_feats].copy()
+            
+                # Guard: enough rows
+                if len(X_use) < k:
+                    st.warning("Not enough rows for the selected K after cleaning. Reduce K or change missing handling.")
+                    st.stop()
+            
+                # ---------- Fit KMeans ----------
+                from sklearn.cluster import KMeans
+                from sklearn.preprocessing import StandardScaler
+                from sklearn.metrics import silhouette_score
+            
+                X_np = X_use.to_numpy()
+                if scale:
+                    scaler = StandardScaler()
+                    X_np = scaler.fit_transform(X_np)
+            
+                km = KMeans(n_clusters=int(k), n_init=10, random_state=int(random_state))
+                labels = km.fit_predict(X_np)
+            
+                inertia = float(km.inertia_)
+                sil = None
+                if int(k) >= 2 and len(X_use) > int(k):
+                    try:
+                        sil = float(silhouette_score(X_np, labels))
+                    except Exception:
+                        sil = None
+            
+                m1, m2, m3 = st.columns(3)
+                with m1:
+                    st.metric("Rows used", f"{len(X_use):,}")
+                with m2:
+                    st.metric("Inertia (↓ better)", f"{inertia:,.2f}")
+                with m3:
+                    st.metric("Silhouette (↑ better)", f"{sil:.3f}" if sil is not None else "—")
+            
+                # ---------- Attach cluster labels back to original df ----------
+                clustered = df.loc[X_use.index].copy()
+                clustered["cluster"] = labels
+            
+                # Save for reuse in other tabs if you want
+                st.session_state["clustered_df"] = clustered
+            
+                # ---------- Cluster profile table ----------
+                profile = clustered.groupby("cluster")[cluster_feats].mean(numeric_only=True).round(3).reset_index()
+                counts = clustered["cluster"].value_counts().sort_index()
+                profile.insert(1, "customers", profile["cluster"].map(counts).astype(int))
+            
+                # If target exists, add bad_rate
+                if "target" in clustered.columns:
+                    tnum = pd.to_numeric(clustered["target"], errors="coerce")
+                    if tnum.notna().any():
+                        bad_rate = clustered.assign(target_num=tnum).groupby("cluster")["target_num"].mean()
+                        profile["bad_rate (%)"] = profile["cluster"].map((bad_rate * 100).round(2))
+            
+                st.markdown("#### Cluster profiles (means)")
+                st.dataframe(profile, use_container_width=True)
+            
+                # ---------- Optional 2D scatter ----------
+                st.markdown("#### 2D visualization (optional)")
+                x_feat = st.selectbox("X axis", options=cluster_feats, index=0, key="km_x_feat")
+                y_feat = st.selectbox("Y axis", options=cluster_feats, index=1, key="km_y_feat")
+            
+                plot_df = clustered[[x_feat, y_feat, "cluster"]].dropna()
+            
+                scatter = (
+                    alt.Chart(plot_df)
+                    .mark_circle(size=60, opacity=0.7)
+                    .encode(
+                        x=alt.X(f"{x_feat}:Q", title=x_feat),
+                        y=alt.Y(f"{y_feat}:Q", title=y_feat),
+                        color=alt.Color("cluster:N", title="Cluster"),
+                        tooltip=["cluster", x_feat, y_feat],
+                    )
+                    .properties(height=320)
+                )
+                st.altair_chart(scatter, use_container_width=True)
+            
+                st.success("K-means clustering finished. Cluster labels saved to session_state['clustered_df'].")
+            
+                
     
 
     # ========== Prediction Models ==========
