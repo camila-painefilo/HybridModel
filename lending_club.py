@@ -106,11 +106,10 @@ and any binary classification workflow ⚡
     )
 
     st.markdown("</div>", unsafe_allow_html=True)
-
+    
     if st.button("🚀 Start the Analysis", key="start_analysis_btn"):
-            st.session_state.welcome_done = True
-            st.rerun()
-
+        st.session_state.welcome_done = True
+        st.rerun()
 st.stop()
 
 
