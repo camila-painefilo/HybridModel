@@ -74,34 +74,41 @@ def main():
 
     st.write("")
 
-    # -------------------- 💠 WELCOME PAGE --------------------
+        # -------------------- 💠 WELCOME PAGE --------------------
     if not st.session_state.welcome_done:
-        col_left, col_gap, col_right = st.columns([2, 0.3, 1])
-
+    
+        # ✅ tuned layout: image is a bit more right, but not fully at the edge
+        col_left, col_gap, col_right = st.columns([2, 0.1, 1.3])
+    
         with col_left:
             st.markdown("## 💳 Welcome to the Hybrid Model Agent")
             st.markdown(
                 """
-A flexible and intelligent platform for:
-
-- tabular data exploration 📊  
-- statistical testing 📏  
-- feature selection 🎯  
-- hybrid predictive modeling 🤖  
-
-Designed for credit scoring, churn prediction, customer analytics,
-and any binary classification workflow ⚡
+    A flexible and intelligent platform for:
+    
+    - tabular data exploration 📊
+    - statistical testing 📏
+    - feature selection 🎯
+    - hybrid predictive modeling 🤖
+    
+    Designed for credit scoring, churn prediction, customer analytics,
+    and any binary classification workflow ⚡
                 """
             )
-
-            if st.button("🚀 Start the Analysis", key="btn_start_welcome"):
+    
+            if st.button("🚀 Start the Analysis"):
                 st.session_state.welcome_done = True
                 st.rerun()
-
+    
         with col_right:
+            # ✅ optional tiny offset INSIDE the column (move slightly right)
+            st.markdown("<div style='margin-left:20px;'>", unsafe_allow_html=True)
             st.image("welcome_image.png", width=260)
-
+            st.markdown("</div>", unsafe_allow_html=True)
+    
         st.stop()  # ⛔ prevents rest of dashboard from loading
+
+   
 
     # -------------------- 1. Data upload --------------------
     st.markdown("## 1. Data upload")
