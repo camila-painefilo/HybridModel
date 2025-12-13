@@ -1917,17 +1917,17 @@ and any binary classification workflow ⚡
             )
 
             # ----------------------------------------------------
-            # TAB 3 — K-Means clustering segmentation (Generic)
+            # TAB 3 — K-Means clustering segmentation (Revised)
             # ----------------------------------------------------
             with tab3:
                 st.markdown("### 🧩 K-Means Clustering (Unsupervised Segmentation)")
                 st.caption(
-                    "This creates segments automatically based on similarity in selected features. "
-                    "No target is required. If 'target' exists, we will show bad_rate by cluster."
+                    "Creates customer segments automatically based on similarity in selected features. "
+                    "No target is required. If 'target' exists, we show bad_rate by cluster."
                 )
             
                 # ---------- UI controls ----------
-                cA, cB, cC = st.columns([1, 1, 2])
+                cA, cB, cC, cD = st.columns([1, 1, 2, 1])
                 with cA:
                     k = st.slider("K (number of clusters)", 2, 10, 4, 1, key="km_k")
                 with cB:
@@ -1939,11 +1939,19 @@ and any binary classification workflow ⚡
                         index=0,
                         key="km_missing"
                     )
+                with cD:
+                    use_pca = st.checkbox("Use PCA plot", value=True, help="Recommended when many features are used.", key="km_use_pca")
             
-                # ---------- Helper: build clustering matrix (generic) ----------
-                def build_cluster_matrix(df_in: pd.DataFrame, missing_strategy_km: str) -> pd.DataFrame:
+                # ---------- Helper: build clustering matrix ----------
+                def build_cluster_matrix(df_in: pd.DataFrame, missing_strategy: str) -> pd.DataFrame:
                     d = df_in.copy()
+            
+                    # Exclude model / output columns
                     exclude_cols = {"target", "churn_proba", "predicted_label"}
+            
+                    # ✅ Telco fix: TotalCharges often loads as text due to blanks
+                    if "TotalCharges" in d.columns:
+                        d["TotalCharges"] = pd.to_numeric(d["TotalCharges"], errors="coerce")
             
                     # 1) Bool -> 0/1
                     bool_cols = [c for c in d.select_dtypes(include=["bool"]).columns if c not in exclude_cols]
@@ -1956,7 +1964,6 @@ and any binary classification workflow ⚡
                         vals = d[c].dropna().unique()
                         if len(vals) != 2:
                             continue
-            
                         norm_vals = {str(v).strip().lower() for v in vals}
             
                         if norm_vals.issubset({"yes", "no"}):
@@ -1976,9 +1983,9 @@ and any binary classification workflow ⚡
                     X = d[num_cols].copy()
             
                     # 4) Missing handling
-                    if missing_strategy_km == "Impute with mean":
+                    if missing_strategy == "Impute with mean":
                         X = X.apply(lambda s: s.fillna(s.mean()))
-                    elif missing_strategy_km == "Impute with 0":
+                    elif missing_strategy == "Impute with 0":
                         X = X.fillna(0)
                     else:
                         X = X.dropna()
@@ -1989,20 +1996,22 @@ and any binary classification workflow ⚡
             
                     return X
             
-                # Build clustering matrix
+                # Build matrix
                 X_all = build_cluster_matrix(df, missing_strategy_km)
-            
                 if X_all.empty or X_all.shape[1] < 2:
                     st.info("Not enough usable numeric/binary features for K-means (need at least 2).")
                     st.stop()
             
-                # Feature picker
-                default_feats = list(X_all.columns[: min(6, X_all.shape[1])])
+                # ---------- Feature selection ----------
+                # Good defaults for Telco if present
+                preferred = [c for c in ["tenure", "MonthlyCharges", "TotalCharges"] if c in X_all.columns]
+                default_feats = (preferred + [c for c in X_all.columns if c not in preferred])[: min(6, X_all.shape[1])]
+            
                 cluster_feats = st.multiselect(
                     "Choose features for clustering",
                     options=list(X_all.columns),
                     default=default_feats,
-                    help="Pick numeric/binary features. More features ≠ always better.",
+                    help="Pick numeric/binary features. (For Telco: tenure + MonthlyCharges + TotalCharges is a strong start.)",
                     key="km_feats"
                 )
                 if len(cluster_feats) < 2:
@@ -2010,7 +2019,6 @@ and any binary classification workflow ⚡
                     st.stop()
             
                 X_use = X_all[cluster_feats].copy()
-            
                 if len(X_use) < int(k):
                     st.warning("Not enough rows for the selected K after cleaning. Reduce K or change missing handling.")
                     st.stop()
@@ -2018,6 +2026,7 @@ and any binary classification workflow ⚡
                 # ---------- Fit KMeans ----------
                 from sklearn.preprocessing import StandardScaler
                 from sklearn.metrics import silhouette_score
+                from sklearn.decomposition import PCA
             
                 X_np = X_use.to_numpy()
                 scaler = None
@@ -2049,7 +2058,7 @@ and any binary classification workflow ⚡
                 clustered["cluster"] = labels
                 st.session_state["clustered_df"] = clustered
             
-                # ---------- Cluster profiles ----------
+                # ---------- Cluster profile table ----------
                 profile = clustered.groupby("cluster")[cluster_feats].mean(numeric_only=True).round(3).reset_index()
                 counts = clustered["cluster"].value_counts().sort_index()
                 profile.insert(1, "customers", profile["cluster"].map(counts).astype(int))
@@ -2063,29 +2072,62 @@ and any binary classification workflow ⚡
                 st.markdown("#### Cluster profiles (means)")
                 st.dataframe(profile, use_container_width=True)
             
-                # ---------- 2D scatter ----------
-                st.markdown("#### 2D visualization")
-                st.caption("Note: If standardization was enabled, clustering was done on standardized data, but the plot shows original values.")
+                # ---------- Visualization ----------
+                st.markdown("#### Visualization")
             
-                x_feat = st.selectbox("X axis", options=cluster_feats, index=0, key="km_x_feat")
-                y_feat = st.selectbox("Y axis", options=cluster_feats, index=1, key="km_y_feat")
+                if use_pca:
+                    st.caption("PCA plot: best way to visualize clusters when you use many features (matches K-means space).")
+                    pca = PCA(n_components=2, random_state=int(random_state))
+                    XY = pca.fit_transform(X_np)
             
-                plot_df = clustered[[x_feat, y_feat, "cluster"]].dropna()
-            
-                scatter = (
-                    alt.Chart(plot_df)
-                    .mark_circle(size=60, opacity=0.7)
-                    .encode(
-                        x=alt.X(f"{x_feat}:Q", title=x_feat),
-                        y=alt.Y(f"{y_feat}:Q", title=y_feat),
-                        color=alt.Color("cluster:N", title="Cluster"),
-                        tooltip=["cluster", x_feat, y_feat],
+                    plot_df = pd.DataFrame({"PC1": XY[:, 0], "PC2": XY[:, 1], "cluster": labels})
+                    scatter = (
+                        alt.Chart(plot_df)
+                        .mark_circle(size=60, opacity=0.7)
+                        .encode(
+                            x=alt.X("PC1:Q", title="PC1"),
+                            y=alt.Y("PC2:Q", title="PC2"),
+                            color=alt.Color("cluster:N", title="Cluster"),
+                            tooltip=["cluster", alt.Tooltip("PC1:Q", format=".3f"), alt.Tooltip("PC2:Q", format=".3f")]
+                        )
+                        .properties(height=320)
                     )
-                    .properties(height=320)
-                )
-                st.altair_chart(scatter, use_container_width=True)
+                    st.altair_chart(scatter, use_container_width=True)
             
-                st.success("K-means clustering finished. Cluster labels saved to session_state['clustered_df'].")
+                else:
+                    # Only allow "continuous-ish" features for X/Y axis to avoid ugly 0/1 lines
+                    plot_candidates = []
+                    for c in cluster_feats:
+                        s = pd.to_numeric(clustered[c], errors="coerce")
+                        if s.notna().sum() == 0:
+                            continue
+                        if s.nunique(dropna=True) >= 8:   # hide binary / low-card columns
+                            plot_candidates.append(c)
+            
+                    if len(plot_candidates) < 2:
+                        st.info(
+                            "Not enough continuous features for a 2D scatter (many are binary like Partner/PhoneService). "
+                            "Turn ON 'Use PCA plot' or include MonthlyCharges/TotalCharges."
+                        )
+                    else:
+                        x_feat = st.selectbox("X axis", options=plot_candidates, index=0, key="km_x_feat")
+                        y_feat = st.selectbox("Y axis", options=plot_candidates, index=1, key="km_y_feat")
+            
+                        plot_df = clustered[[x_feat, y_feat, "cluster"]].dropna()
+                        scatter = (
+                            alt.Chart(plot_df)
+                            .mark_circle(size=60, opacity=0.7)
+                            .encode(
+                                x=alt.X(f"{x_feat}:Q", title=x_feat),
+                                y=alt.Y(f"{y_feat}:Q", title=y_feat),
+                                color=alt.Color("cluster:N", title="Cluster"),
+                                tooltip=["cluster", x_feat, y_feat],
+                            )
+                            .properties(height=320)
+                        )
+                        st.altair_chart(scatter, use_container_width=True)
+            
+                st.success("K-means finished. Cluster labels saved to session_state['clustered_df'].")
 
                 
     
