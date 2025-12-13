@@ -84,20 +84,25 @@ def main():
             st.image("welcome_image.png", width=260)
 
         with col_right:
+            st.markdown("<div style='margin-left:-15px;'>", unsafe_allow_html=True)
+        
             st.markdown("## 💳 Welcome to the Hybrid Model Agent")
             st.markdown(
                 """
-A flexible and intelligent platform for:
-
-- tabular data exploration 📊  
-- statistical testing 📏  
-- feature selection 🎯  
-- hybrid predictive modeling 🤖  
-
-Designed for credit scoring, churn prediction, customer analytics,
-and any binary classification workflow ⚡
+        A flexible and intelligent platform for:
+        
+        - tabular data exploration 📊  
+        - statistical testing 📏  
+        - feature selection 🎯  
+        - hybrid predictive modeling 🤖  
+        
+        Designed for credit scoring, churn prediction, customer analytics,
+        and any binary classification workflow ⚡
                 """
             )
+
+    st.markdown("</div>", unsafe_allow_html=True)
+
 
             if st.button("🚀 Start the Analysis"):
                 st.session_state.welcome_done = True
