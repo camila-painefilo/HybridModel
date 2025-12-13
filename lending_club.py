@@ -74,39 +74,37 @@ def main():
 
     st.write("")
 
+    
         # -------------------- 💠 WELCOME PAGE --------------------
-        if not st.session_state.welcome_done:
-        
-            # Image on the LEFT, text on the RIGHT
-            col_left, col_gap, col_right = st.columns([1.3, 0.1, 2])
-        
-            with col_left:
-                st.image("welcome_image.png", width=260)
-        
-            with col_right:
-                st.markdown("## 💳 Welcome to the Hybrid Model Agent")
-                st.markdown(
-                    """
-        A flexible and intelligent platform for:
-        
-        - tabular data exploration 📊  
-        - statistical testing 📏  
-        - feature selection 🎯  
-        - hybrid predictive modeling 🤖  
-        
-        Designed for credit scoring, churn prediction, customer analytics,
-        and any binary classification workflow ⚡
-                    """
-                )
-        
-                if st.button("🚀 Start the Analysis"):
-                    st.session_state.welcome_done = True
-                    st.rerun()
-        
-            st.stop()  # ⛔ prevents rest of dashboard from loading
+    if not st.session_state.welcome_done:
 
+        col_left, col_gap, col_right = st.columns([1.3, 0.1, 2])
 
-   
+        with col_left:
+            st.image("welcome_image.png", width=260)
+
+        with col_right:
+            st.markdown("## 💳 Welcome to the Hybrid Model Agent")
+            st.markdown(
+                """
+A flexible and intelligent platform for:
+
+- tabular data exploration 📊  
+- statistical testing 📏  
+- feature selection 🎯  
+- hybrid predictive modeling 🤖  
+
+Designed for credit scoring, churn prediction, customer analytics,
+and any binary classification workflow ⚡
+                """
+            )
+
+            if st.button("🚀 Start the Analysis"):
+                st.session_state.welcome_done = True
+                st.rerun()
+
+        st.stop()
+
 
     # -------------------- 1. Data upload --------------------
     st.markdown("## 1. Data upload")
