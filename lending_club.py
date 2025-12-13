@@ -1697,17 +1697,18 @@ and any binary classification workflow ⚡
        # ==================== CUSTOMER SEGMENTATION PAGE ====================
     elif page == "👥 Customer Segmentation":
         st.subheader("👥 Customer Segmentation")
-
+    
         if df.empty:
             st.info("Please upload a dataset first.")
             st.stop()
     
-    
-        
-       tab1, tab2, tab3 = st.tabs([
+        tab1, tab2, tab3 = st.tabs([
             "📊 General segmentation",
             "💰 Risk × Value Segmentation",
-            "🧩 K-Means Clustering"])
+            "🧩 K-Means Clustering"
+        ])
+
+
 
     
         # ----------------------------------------------------
