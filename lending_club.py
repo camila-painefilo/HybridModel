@@ -1917,13 +1917,19 @@ and any binary classification workflow ⚡
             )
 
             # ----------------------------------------------------
-            # TAB 3 — K-Means clustering segmentation (Revised)
+            # TAB 3 — K-Means clustering segmentation (Revised + Interpretable + Churn views)
             # ----------------------------------------------------
             with tab3:
                 st.markdown("### 🧩 K-Means Clustering (Unsupervised Segmentation)")
                 st.caption(
-                    "Creates customer segments automatically based on similarity in selected features. "
-                    "No target is required. If 'target' exists, we show bad_rate by cluster."
+                    "Creates segments based on similarity in selected features. "
+                    "Clusters are created WITHOUT using churn/target. "
+                    "If 'target' exists, we overlay churn information to interpret clusters."
+                )
+            
+                st.info(
+                    "✅ Cluster IDs (0,1,2,...) are just labels. "
+                    "Interpretation comes from comparing feature averages and (if available) churn rate across clusters."
                 )
             
                 # ---------- UI controls ----------
@@ -1942,16 +1948,32 @@ and any binary classification workflow ⚡
                 with cD:
                     use_pca = st.checkbox("Use PCA plot", value=True, help="Recommended when many features are used.", key="km_use_pca")
             
+                # ---------- Helper: safe numeric conversion for common 'numeric stored as text' columns ----------
+                def coerce_numeric_like(df_in: pd.DataFrame) -> pd.DataFrame:
+                    d = df_in.copy()
+                    for col in d.columns:
+                        if d[col].dtype == "object":
+                            # attempt to parse numbers from strings (e.g., " ", "1,234", "$56.7")
+                            s = d[col].astype(str).str.strip()
+                            # only attempt if it looks somewhat numeric
+                            looks_numeric = s.str.match(r"^[-+]?[\d\.,\s]+$").mean() > 0.7
+                            if looks_numeric:
+                                d[col] = (
+                                    s.str.replace(",", "", regex=False)
+                                     .replace({"": np.nan, "nan": np.nan, "None": np.nan})
+                                )
+                                d[col] = pd.to_numeric(d[col], errors="coerce")
+                    return d
+            
                 # ---------- Helper: build clustering matrix ----------
                 def build_cluster_matrix(df_in: pd.DataFrame, missing_strategy: str) -> pd.DataFrame:
                     d = df_in.copy()
             
                     # Exclude model / output columns
-                    exclude_cols = {"target", "churn_proba", "predicted_label"}
+                    exclude_cols = {"target", "churn_proba", "predicted_label", "label"}
             
-                    # ✅ Telco fix: TotalCharges often loads as text due to blanks
-                    if "TotalCharges" in d.columns:
-                        d["TotalCharges"] = pd.to_numeric(d["TotalCharges"], errors="coerce")
+                    # try to coerce numeric-like object columns
+                    d = coerce_numeric_like(d)
             
                     # 1) Bool -> 0/1
                     bool_cols = [c for c in d.select_dtypes(include=["bool"]).columns if c not in exclude_cols]
@@ -2003,15 +2025,14 @@ and any binary classification workflow ⚡
                     st.stop()
             
                 # ---------- Feature selection ----------
-                # Good defaults for Telco if present
-                preferred = [c for c in ["tenure", "MonthlyCharges", "TotalCharges"] if c in X_all.columns]
-                default_feats = (preferred + [c for c in X_all.columns if c not in preferred])[: min(6, X_all.shape[1])]
+                # Generic default: take up to 6 numeric/binary features
+                default_feats = list(X_all.columns[: min(6, X_all.shape[1])])
             
                 cluster_feats = st.multiselect(
                     "Choose features for clustering",
                     options=list(X_all.columns),
                     default=default_feats,
-                    help="Pick numeric/binary features. (For Telco: tenure + MonthlyCharges + TotalCharges is a strong start.)",
+                    help="Pick numeric/binary features. Tip: start with 2–6 meaningful behavior/value features.",
                     key="km_feats"
                 )
                 if len(cluster_feats) < 2:
@@ -2029,7 +2050,6 @@ and any binary classification workflow ⚡
                 from sklearn.decomposition import PCA
             
                 X_np = X_use.to_numpy()
-                scaler = None
                 if scale:
                     scaler = StandardScaler()
                     X_np = scaler.fit_transform(X_np)
@@ -2058,12 +2078,27 @@ and any binary classification workflow ⚡
                 clustered["cluster"] = labels
                 st.session_state["clustered_df"] = clustered
             
+                # ---------- Build PCA coords for visualization (recommended) ----------
+                pca = PCA(n_components=2, random_state=int(random_state))
+                XY = pca.fit_transform(X_np)
+            
+                viz = clustered.copy()
+                viz["PC1"] = XY[:, 0]
+                viz["PC2"] = XY[:, 1]
+            
+                # ---------- Prepare churn label if target exists ----------
+                has_target = "target" in viz.columns
+                if has_target:
+                    viz["target_num"] = pd.to_numeric(viz["target"], errors="coerce")
+                    viz = viz[viz["target_num"].isin([0, 1]) | viz["target_num"].isna()].copy()
+                    viz["churn_label"] = viz["target_num"].map({0: "No churn (0)", 1: "Churn (1)"})
+            
                 # ---------- Cluster profile table ----------
                 profile = clustered.groupby("cluster")[cluster_feats].mean(numeric_only=True).round(3).reset_index()
                 counts = clustered["cluster"].value_counts().sort_index()
                 profile.insert(1, "customers", profile["cluster"].map(counts).astype(int))
             
-                if "target" in clustered.columns:
+                if has_target:
                     tnum = pd.to_numeric(clustered["target"], errors="coerce")
                     if tnum.notna().any():
                         bad_rate = clustered.assign(target_num=tnum).groupby("cluster")["target_num"].mean()
@@ -2072,62 +2107,162 @@ and any binary classification workflow ⚡
                 st.markdown("#### Cluster profiles (means)")
                 st.dataframe(profile, use_container_width=True)
             
-                # ---------- Visualization ----------
-                st.markdown("#### Visualization")
+                # ---------- Visualization section ----------
+                st.markdown("#### Visualizations")
             
-                if use_pca:
-                    st.caption("PCA plot: best way to visualize clusters when you use many features (matches K-means space).")
-                    pca = PCA(n_components=2, random_state=int(random_state))
-                    XY = pca.fit_transform(X_np)
+                # A) Cluster map (PCA 2D)
+                st.markdown("**A) Cluster map (PCA 2D)**")
+                st.caption("This shows how the algorithm grouped customers in the feature space used for K-means.")
             
-                    plot_df = pd.DataFrame({"PC1": XY[:, 0], "PC2": XY[:, 1], "cluster": labels})
-                    scatter = (
-                        alt.Chart(plot_df)
-                        .mark_circle(size=60, opacity=0.7)
-                        .encode(
-                            x=alt.X("PC1:Q", title="PC1"),
-                            y=alt.Y("PC2:Q", title="PC2"),
-                            color=alt.Color("cluster:N", title="Cluster"),
-                            tooltip=["cluster", alt.Tooltip("PC1:Q", format=".3f"), alt.Tooltip("PC2:Q", format=".3f")]
-                        )
-                        .properties(height=320)
+                chart_cluster = (
+                    alt.Chart(viz.dropna(subset=["PC1", "PC2"]))
+                    .mark_circle(size=60, opacity=0.7)
+                    .encode(
+                        x=alt.X("PC1:Q", title="PC1"),
+                        y=alt.Y("PC2:Q", title="PC2"),
+                        color=alt.Color("cluster:N", title="Cluster"),
+                        tooltip=["cluster:N", alt.Tooltip("PC1:Q", format=".3f"), alt.Tooltip("PC2:Q", format=".3f")]
                     )
-                    st.altair_chart(scatter, use_container_width=True)
+                    .properties(height=320)
+                )
+                st.altair_chart(chart_cluster, use_container_width=True)
             
+                # B) Churn vs Non-churn views (two charts)
+                st.markdown("**B) Churn vs Non-churn distribution (same PCA space)**")
+                if not has_target or viz["target_num"].dropna().nunique() < 2:
+                    st.info("Target/churn not available → cannot split churn vs non-churn views.")
                 else:
-                    # Only allow "continuous-ish" features for X/Y axis to avoid ugly 0/1 lines
-                    plot_candidates = []
-                    for c in cluster_feats:
-                        s = pd.to_numeric(clustered[c], errors="coerce")
-                        if s.notna().sum() == 0:
-                            continue
-                        if s.nunique(dropna=True) >= 8:   # hide binary / low-card columns
-                            plot_candidates.append(c)
+                    c1, c2 = st.columns(2)
+                    churn_only = viz[viz["target_num"] == 1].copy()
+                    nochurn_only = viz[viz["target_num"] == 0].copy()
             
-                    if len(plot_candidates) < 2:
-                        st.info(
-                            "Not enough continuous features for a 2D scatter (many are binary like Partner/PhoneService). "
-                            "Turn ON 'Use PCA plot' or include MonthlyCharges/TotalCharges."
-                        )
-                    else:
-                        x_feat = st.selectbox("X axis", options=plot_candidates, index=0, key="km_x_feat")
-                        y_feat = st.selectbox("Y axis", options=plot_candidates, index=1, key="km_y_feat")
-            
-                        plot_df = clustered[[x_feat, y_feat, "cluster"]].dropna()
-                        scatter = (
-                            alt.Chart(plot_df)
-                            .mark_circle(size=60, opacity=0.7)
+                    with c1:
+                        st.markdown("Churn (target=1)")
+                        st.altair_chart(
+                            alt.Chart(churn_only.dropna(subset=["PC1", "PC2"]))
+                            .mark_circle(size=70, opacity=0.75)
                             .encode(
-                                x=alt.X(f"{x_feat}:Q", title=x_feat),
-                                y=alt.Y(f"{y_feat}:Q", title=y_feat),
+                                x=alt.X("PC1:Q", title="PC1"),
+                                y=alt.Y("PC2:Q", title="PC2"),
                                 color=alt.Color("cluster:N", title="Cluster"),
-                                tooltip=["cluster", x_feat, y_feat],
+                                tooltip=["cluster:N", "churn_label:N", alt.Tooltip("PC1:Q", format=".3f"), alt.Tooltip("PC2:Q", format=".3f")]
                             )
-                            .properties(height=320)
+                            .properties(height=300),
+                            use_container_width=True
                         )
-                        st.altair_chart(scatter, use_container_width=True)
+            
+                    with c2:
+                        st.markdown("No churn (target=0)")
+                        st.altair_chart(
+                            alt.Chart(nochurn_only.dropna(subset=["PC1", "PC2"]))
+                            .mark_circle(size=70, opacity=0.75)
+                            .encode(
+                                x=alt.X("PC1:Q", title="PC1"),
+                                y=alt.Y("PC2:Q", title="PC2"),
+                                color=alt.Color("cluster:N", title="Cluster"),
+                                tooltip=["cluster:N", "churn_label:N", alt.Tooltip("PC1:Q", format=".3f"), alt.Tooltip("PC2:Q", format=".3f")]
+                            )
+                            .properties(height=300),
+                            use_container_width=True
+                        )
+            
+                # C) Churn rate by cluster
+                st.markdown("**C) Churn rate by cluster (if target exists)**")
+                if "bad_rate (%)" in profile.columns:
+                    churn_bar = (
+                        alt.Chart(profile.dropna(subset=["bad_rate (%)"]))
+                        .mark_bar()
+                        .encode(
+                            x=alt.X("cluster:N", title="Cluster"),
+                            y=alt.Y("bad_rate (%):Q", title="Churn / Bad rate (%)"),
+                            tooltip=["cluster:N", "customers:Q", alt.Tooltip("bad_rate (%):Q", format=".2f")]
+                        )
+                        .properties(height=250)
+                    )
+                    st.altair_chart(churn_bar, use_container_width=True)
+                else:
+                    st.info("No valid 0/1 target mapping found → churn-rate by cluster is unavailable.")
+            
+                # ---------- Auto-interpretation (generic) ----------
+                st.markdown("### 🧠 What do these clusters mean?")
+                st.caption("We interpret clusters by comparing each cluster's average feature values to the overall average (relative interpretation).")
+            
+                # Overall means for relative comparison
+                overall_means = {}
+                for f in cluster_feats:
+                    s = pd.to_numeric(clustered[f], errors="coerce")
+                    if s.notna().sum() > 0:
+                        overall_means[f] = float(s.mean())
+            
+                def describe_relative(val, base, strong=0.35, mild=0.15):
+                    if base is None or pd.isna(base) or base == 0 or pd.isna(val):
+                        return None
+                    diff = (val - base) / abs(base)
+                    if diff >= strong:
+                        return "much higher than average"
+                    elif diff >= mild:
+                        return "slightly higher than average"
+                    elif diff <= -strong:
+                        return "much lower than average"
+                    elif diff <= -mild:
+                        return "slightly lower than average"
+                    else:
+                        return "close to average"
+            
+                def top_distinctive_features(cluster_row, base_means, feats, top_n=3):
+                    scores = []
+                    for f in feats:
+                        if f not in base_means:
+                            continue
+                        base = base_means[f]
+                        val = float(cluster_row[f])
+                        if pd.isna(val) or pd.isna(base) or base == 0:
+                            continue
+                        rel = abs((val - base) / abs(base))
+                        scores.append((rel, f, val, base))
+                    scores.sort(reverse=True, key=lambda x: x[0])
+                    return scores[:top_n]
+            
+                for _, row in profile.iterrows():
+                    cid = int(row["cluster"])
+                    n_customers = int(row["customers"])
+                    st.markdown(f"#### Cluster {cid} — {n_customers:,} customers")
+            
+                    # top 3 distinctive features
+                    top_feats = top_distinctive_features(row, overall_means, cluster_feats, top_n=3)
+            
+                    if top_feats:
+                        lines = []
+                        for rel, f, val, base in top_feats:
+                            phrase = describe_relative(val, base)
+                            if phrase:
+                                lines.append(f"- **{f}** is **{phrase}** (cluster avg={val:.3g}, overall avg={base:.3g})")
+                        st.markdown("\n".join(lines) if lines else "Not enough information to generate a relative explanation.")
+                    else:
+                        st.caption("Not enough numeric information to generate a relative explanation for this cluster.")
+            
+                    # churn interpretation if available
+                    if "bad_rate (%)" in profile.columns and not pd.isna(row.get("bad_rate (%)", np.nan)):
+                        br = float(row["bad_rate (%)"])
+                        # overall churn
+                        tnum_all = pd.to_numeric(clustered.get("target", pd.Series(dtype=float)), errors="coerce")
+                        overall_br = float(tnum_all.mean() * 100) if tnum_all.notna().any() else None
+            
+                        if overall_br is not None:
+                            st.markdown(f"**Churn/Bad rate:** {br:.2f}% (overall: {overall_br:.2f}%)")
+                            if br >= overall_br + 10:
+                                st.caption("🔴 Higher risk than average → prioritize retention / proactive support.")
+                            elif br <= overall_br - 10:
+                                st.caption("🟢 Lower risk than average → maintain experience; consider upsell if relevant.")
+                            else:
+                                st.caption("🟡 Similar risk to average → monitor; test targeted offers if needed.")
+                        else:
+                            st.markdown(f"**Churn/Bad rate:** {br:.2f}%")
+            
+                    st.divider()
             
                 st.success("K-means finished. Cluster labels saved to session_state['clustered_df'].")
+
 
                 
     
