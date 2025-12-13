@@ -75,24 +75,19 @@ def main():
     st.write("")
 
     # -------------------- 💠 WELCOME PAGE --------------------
-    if not st.session_state.welcome_done:
+if not st.session_state.welcome_done:
 
-        col_left, col_gap, col_right = st.columns([1.3, 0.1, 2])
+    col_left, col_gap, col_right = st.columns([1.3, 0.1, 2])
 
-        with col_left:
-            st.image("welcome_image.png", width=260)
+    with col_left:
+        st.image("welcome_image.png", width=260)
 
-        with col_right:
-            st.markdown(
-                """
-                <div style="padding-left: 10px;">
-                """,
-                unsafe_allow_html=True
-            )
-        
-            st.markdown("## 💳 Welcome to the Hybrid Model Agent")
-            st.markdown(
-                """
+    with col_right:
+        st.markdown("<div style='padding-left:10px;'>", unsafe_allow_html=True)
+
+        st.markdown("## 💳 Welcome to the Hybrid Model Agent")
+        st.markdown(
+            """
 A flexible and intelligent platform for:
 
 - tabular data exploration 📊  
@@ -102,15 +97,16 @@ A flexible and intelligent platform for:
 
 Designed for credit scoring, churn prediction, customer analytics,
 and any binary classification workflow ⚡
-        """
-    )
+            """
+        )
 
-    st.markdown("</div>", unsafe_allow_html=True)
-    
-    if st.button("🚀 Start the Analysis", key="start_analysis_btn"):
-        st.session_state.welcome_done = True
-        st.rerun()
-st.stop()
+        st.markdown("</div>", unsafe_allow_html=True)
+
+        if st.button("🚀 Start the Analysis"):
+            st.session_state.welcome_done = True
+            st.rerun()
+
+    st.stop()
 
 
     # -------------------- 1. Data upload --------------------
