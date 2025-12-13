@@ -1,5 +1,6 @@
 # app.py — Lending Club Dashboard (robust version with error display)
 # -*- coding: utf-8 -*-
+
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -26,10 +27,9 @@ def main():
     from sklearn.cluster import KMeans
 
     # ✅ GAN library (only loaded when the app actually runs)
-    from ctgan import CTGAN   # or CTGANSynthesizer depending on your version
+    from ctgan import CTGAN  # or CTGANSynthesizer depending on your version
     import warnings
     warnings.filterwarnings("ignore", category=UserWarning, module="altair")
-
 
     # -------------------- Page & Theme --------------------
     st.set_page_config(page_title="Hybrid Model Agent", page_icon="💳", layout="wide")
@@ -57,8 +57,7 @@ def main():
         f"""
         <div class="hero">
           <div style="display:flex; align-items:center; gap:20px; flex-wrap:wrap;">
-            <img src="{LOGO_URL}" alt="Logo"
-                 style="height:56px; border-radius:8px;">
+            <img src="{LOGO_URL}" alt="Logo" style="height:56px; border-radius:8px;">
             <div>
               <div style="font-size:2rem; font-weight:800; line-height:1.2;">
                 {TITLE}
@@ -77,34 +76,30 @@ def main():
 
     # -------------------- 💠 WELCOME PAGE --------------------
     if not st.session_state.welcome_done:
+        col_left, col_gap, col_right = st.columns([2, 0.3, 1])
 
-        col1, col2, col3 = st.columns([2, 0.3, 1])
-
-        with col1:
+        with col_left:
             st.markdown("## 💳 Welcome to the Hybrid Model Agent")
-            st.markdown("""... your bullets ...""")
-            if st.button("🚀 Start the Analysis"):
-                st.session_state.welcome_done = True
-                st.rerun()
-        
-        with col3:
-            st.image("welcome_image.png", width=260)
+            st.markdown(
+                """
+A flexible and intelligent platform for:
 
-A flexible and intelligent platform for  
-- tabular data exploration 📊
-- statistical testing 📏
-- feature selection 🎯
-- hybrid predictive modeling 🤖
+- tabular data exploration 📊  
+- statistical testing 📏  
+- feature selection 🎯  
+- hybrid predictive modeling 🤖  
 
 Designed for credit scoring, churn prediction, customer analytics,
 and any binary classification workflow ⚡
                 """
             )
 
-            start = st.button("🚀 Start the Analysis")
-            if start:
+            if st.button("🚀 Start the Analysis", key="btn_start_welcome"):
                 st.session_state.welcome_done = True
                 st.rerun()
+
+        with col_right:
+            st.image("welcome_image.png", width=260)
 
         st.stop()  # ⛔ prevents rest of dashboard from loading
 
